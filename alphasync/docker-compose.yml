@@ -1,1 +1,24 @@
-# AlphaSync placeholder
+version: "3.9"
+
+services:
+
+  postgres:
+    image: postgres:15
+    container_name: alphasync_postgres
+    environment:
+      POSTGRES_USER: alphasync
+      POSTGRES_PASSWORD: alphasync
+      POSTGRES_DB: alphasync
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    container_name: alphasync_redis
+    ports:
+      - "6379:6379"
+
+volumes:
+  postgres_data:
