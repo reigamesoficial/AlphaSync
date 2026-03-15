@@ -1,10 +1,44 @@
 from __future__ import annotations
 
+import json
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, computed_field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_INSECURE_KEY_FRAGMENTS = {
+    "change_this",
+    "changeme",
+    "your_secret",
+    "secret_key",
+    "example",
+    "placeholder",
+    "insecure",
+    "default",
+    "test",
+}
+
+
+def _parse_cors_str(value: str | list) -> list[str]:
+    """Converte CORS_ORIGINS de string (JSON ou CSV) para lista."""
+    if isinstance(value, list):
+        return [str(o).strip() for o in value if str(o).strip()]
+    if not isinstance(value, str):
+        return []
+    value = value.strip()
+    if not value:
+        return []
+    # JSON array: ["*"] ou ["https://app.com","http://localhost:3000"]
+    if value.startswith("["):
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return [str(o).strip() for o in parsed if str(o).strip()]
+        except (json.JSONDecodeError, ValueError):
+            pass
+    # Comma-separated: https://app.com,http://localhost:3000
+    return [item.strip() for item in value.split(",") if item.strip()]
 
 
 class Settings(BaseSettings):
@@ -38,24 +72,19 @@ class Settings(BaseSettings):
     database_url: str
     redis_url: str = "redis://localhost:6379/0"
 
-    @field_validator("database_url", mode="before")
-    @classmethod
-    def fix_database_url(cls, value: str) -> str:
-        if isinstance(value, str) and value.startswith("postgresql://"):
-            return value.replace("postgresql://", "postgresql+psycopg2://", 1)
-        return value
+    # ============================================================
+    # CORS — armazenado como str para evitar JSON-parse automático
+    # do pydantic_settings. Formatos aceitos:
+    #   JSON array : ["*"]  ou  ["https://app.com","http://localhost:3000"]
+    #   CSV        : https://app.com,http://localhost:3000
+    #   Wildcard   : *
+    # ============================================================
+    cors_origins: str = "http://localhost:3000,http://localhost:5173"
 
-    # ============================================================
-    # CORS
-    # ============================================================
-    cors_origins: list[str] = Field(
-        default_factory=lambda: [
-            "http://localhost:3000",
-            "http://localhost:5173",
-            "http://127.0.0.1:3000",
-            "http://127.0.0.1:5173",
-        ]
-    )
+    @computed_field  # type: ignore[misc]
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return _parse_cors_str(self.cors_origins)
 
     # ============================================================
     # MULTI-TENANT / PLATFORM
@@ -70,6 +99,13 @@ class Settings(BaseSettings):
     whatsapp_api_version: str = "v21.0"
     whatsapp_webhook_verify_token: str | None = None
     whatsapp_app_secret: str | None = None
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _fix_database_url(cls, value: str) -> str:
+        if isinstance(value, str) and value.startswith("postgresql://"):
+            return value.replace("postgresql://", "postgresql+psycopg2://", 1)
+        return value
 
     # ============================================================
     # GOOGLE CALENDAR
@@ -88,16 +124,39 @@ class Settings(BaseSettings):
     # ============================================================
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
 
-    @field_validator("cors_origins", mode="before")
-    @classmethod
-    def parse_cors_origins(cls, value):
-        if isinstance(value, str):
-            value = value.strip()
-            if not value:
-                return []
-            return [item.strip() for item in value.split(",") if item.strip()]
-        return value
+    # ============================================================
+    # SEED (primeiro admin — só usado pelo script scripts/seed_admin.py)
+    # ============================================================
+    seed_admin_email: str = "admin@alphasync.app"
+    seed_admin_password: str = "changeme123"
+    seed_admin_name: str = "Admin"
+    seed_company_slug: str = "default"
+    seed_company_name: str = "AlphaSync"
 
+    # ============================================================
+    # VALIDAÇÕES DE PRODUÇÃO
+    # ============================================================
+    @model_validator(mode="after")
+    def validate_production_security(self) -> "Settings":
+        if self.app_env == "production":
+            key_lower = self.secret_key.lower()
+            for fragment in _INSECURE_KEY_FRAGMENTS:
+                if fragment in key_lower:
+                    raise ValueError(
+                        f"SECRET_KEY contém fragmento inseguro '{fragment}'. "
+                        "Gere uma chave forte: "
+                        "python -c \"import secrets; print(secrets.token_hex(32))\""
+                    )
+            if self.app_debug:
+                raise ValueError(
+                    "APP_DEBUG=true não é permitido em APP_ENV=production. "
+                    "Defina APP_DEBUG=false no .env de produção."
+                )
+        return self
+
+    # ============================================================
+    # HELPERS
+    # ============================================================
     @property
     def is_development(self) -> bool:
         return self.app_env == "development"
@@ -105,6 +164,17 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.app_env == "production"
+
+    @property
+    def masked_database_url(self) -> str:
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(self.database_url)
+            if parsed.password:
+                return self.database_url.replace(parsed.password, "***")
+        except Exception:
+            pass
+        return "***"
 
 
 @lru_cache
