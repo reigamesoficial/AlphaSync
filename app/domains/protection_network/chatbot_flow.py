@@ -379,27 +379,33 @@ def _build_selected_items_summary(selected_items: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def _build_quote_confirmation_text(*, client_name: str | None, address: str, selected_items: list[dict[str, Any]], color: str | None, mesh_type: str | None, totals: dict[str, Any]) -> str:
+def _build_quote_confirmation_text(*, client_name: str | None, address: str, selected_items: list[dict[str, Any]], color: str | None, mesh_type: str | None, totals: dict[str, Any], show_measures: bool = True) -> str:
     customer = client_name or "cliente"
-    parts = _build_selected_items_summary(selected_items)
     subtotal = _format_money_br(totals.get("subtotal"))
     visit_fee = _format_money_br(totals.get("visit_fee"))
     total = _format_money_br(totals.get("total_value"))
 
-    return (
+    base = (
         f"Perfeito, {customer}.\n\n"
         f"Confira seu orçamento:\n\n"
         f"Nome: {customer}\n"
         f"Endereço: {address}\n"
         f"Cor: {color or 'não informada'}\n"
         f"Malha: {mesh_type or 'não informada'}\n\n"
-        f"Áreas selecionadas:\n{parts}\n\n"
+    )
+
+    if show_measures and selected_items:
+        parts = _build_selected_items_summary(selected_items)
+        base += f"Áreas selecionadas:\n{parts}\n\n"
+
+    base += (
         f"Subtotal: R$ {subtotal}\n"
         f"Taxa/visita: R$ {visit_fee}\n"
         f"Total estimado: R$ {total}\n\n"
         f"1) Confirmar orçamento\n"
         f"2) Alterar dados"
     )
+    return base
 
 
 def handle_inbound_message(*, company, conversation, client, inbound_message, db):
@@ -462,9 +468,19 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
         if lookup_result["found"] and ((lookup_result.get("items") or []) or (lookup_result.get("plants") or {})):
             settings_data = _domain_settings(company)
             show_measures = settings_data.get("show_measures_to_customer", True)
+            context["show_measures_to_customer"] = show_measures
 
             if not show_measures:
-                all_raw = lookup_result.get("items") or []
+                # Collect ALL items from ALL plants silently
+                plants_map = lookup_result.get("plants") or {}
+                if plants_map:
+                    all_raw: list[Any] = []
+                    for plant_items in plants_map.values():
+                        all_raw.extend(plant_items or [])
+                    if not all_raw:
+                        all_raw = lookup_result.get("items") or []
+                else:
+                    all_raw = lookup_result.get("items") or []
                 all_items = [_normalize_catalog_item(item) for item in all_raw]
                 context["address_items_available"] = all_items
                 context["selected_items"] = all_items
@@ -472,8 +488,8 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
                 return _reply_text(
                     conversation,
                     db,
-                    text="Encontrei dados para esse endereço e vou preparar o orçamento.",
-                    next_step="color_choice",
+                    text=_color_prompt(company),
+                    next_step="network_color",
                     context=context,
                 )
 
@@ -865,13 +881,23 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
 
         _rebuild_selected_items(context)
         selected_items = context.get("selected_items") or []
+        show_measures = context.get("show_measures_to_customer", True)
+
         if not selected_items:
+            if show_measures:
+                return _reply_text(
+                    conversation,
+                    db,
+                    text="Não encontrei nenhuma área selecionada. Escolha uma área primeiro.",
+                    next_step="measure_selection",
+                    context=context,
+                )
             return _reply_text(
                 conversation,
                 db,
-                text="Não encontrei nenhuma área selecionada. Escolha uma área primeiro.",
-                next_step="measure_selection",
-                context=context,
+                text="Não encontrei medidas para calcular o orçamento. Por favor, informe o endereço novamente.",
+                next_step="address_lookup",
+                context={},
             )
 
         rule_result = resolve_address_rule(company, context.get("address") or "")
@@ -902,6 +928,7 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
             color=color,
             mesh_type=mesh_type,
             totals=totals,
+            show_measures=show_measures,
         )
 
         return _reply_buttons(
@@ -998,18 +1025,19 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
             )
 
         if normalized in {"quote_confirm_edit", "alterar", "2"}:
+            show_measures = context.get("show_measures_to_customer", True)
+            edit_buttons = [{"id": "edit_address", "title": "Endereço"}]
+            if show_measures:
+                edit_buttons.append({"id": "edit_items", "title": "Áreas"})
+            edit_buttons.append({"id": "edit_color", "title": "Cor"})
+            edit_buttons.append({"id": "edit_mesh", "title": "Malha"})
             return _reply_buttons(
                 conversation,
                 db,
                 text="O que você deseja alterar?",
                 next_step="quote_edit_choice",
                 context=context,
-                buttons=[
-                    {"id": "edit_address", "title": "Endereço"},
-                    {"id": "edit_items", "title": "Áreas"},
-                    {"id": "edit_color", "title": "Cor"},
-                    {"id": "edit_mesh", "title": "Malha"},
-                ],
+                buttons=edit_buttons,
             )
 
         return _reply_buttons(
@@ -1026,6 +1054,8 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
 
     if current_step == "quote_edit_choice":
         normalized = (text or "").strip().lower()
+        show_measures = context.get("show_measures_to_customer", True)
+
         if normalized in {"edit_address", "endereço", "endereco", "1"}:
             return _reply_text(
                 conversation,
@@ -1035,6 +1065,14 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
                 context={},
             )
         if normalized in {"edit_items", "áreas", "areas", "2"}:
+            if not show_measures:
+                return _reply_text(
+                    conversation,
+                    db,
+                    text="Não é possível alterar as áreas. Escolha entre alterar o endereço, a cor ou a malha.",
+                    next_step="quote_edit_choice",
+                    context=context,
+                )
             context["selected_items"] = []
             context["selected_item_ids"] = []
             rows = _build_measure_rows(context.get("address_items_available") or [])
@@ -1075,18 +1113,18 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
                 context=context,
             )
 
+        edit_buttons = [{"id": "edit_address", "title": "Endereço"}]
+        if show_measures:
+            edit_buttons.append({"id": "edit_items", "title": "Áreas"})
+        edit_buttons.append({"id": "edit_color", "title": "Cor"})
+        edit_buttons.append({"id": "edit_mesh", "title": "Malha"})
         return _reply_buttons(
             conversation,
             db,
             text="Escolha o que deseja alterar.",
             next_step="quote_edit_choice",
             context=context,
-            buttons=[
-                {"id": "edit_address", "title": "Endereço"},
-                {"id": "edit_items", "title": "Áreas"},
-                {"id": "edit_color", "title": "Cor"},
-                {"id": "edit_mesh", "title": "Malha"},
-            ],
+            buttons=edit_buttons,
         )
 
     return _reply_text(
