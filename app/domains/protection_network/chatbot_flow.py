@@ -57,9 +57,19 @@ def _current_context(conversation) -> dict[str, Any]:
     return dict(conversation.bot_context or {})
 
 
+def _json_safe(obj: Any) -> Any:
+    if isinstance(obj, Decimal):
+        return float(obj)
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_json_safe(i) for i in obj]
+    return obj
+
+
 def _save_state(conversation, db, *, next_step: str, context: dict[str, Any]) -> None:
     conversation.bot_step = next_step
-    conversation.bot_context = context
+    conversation.bot_context = _json_safe(context)
     flag_modified(conversation, "bot_context")
     db.flush()
 
