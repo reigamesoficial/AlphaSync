@@ -258,13 +258,15 @@ def _append_selected_item(context: dict[str, Any], item: dict[str, Any]) -> None
 
 def _build_colors(company) -> list[str]:
     settings = _domain_settings(company)
-    colors = settings.get("available_colors") or ["branca", "preta", "areia", "cinza"]
+    # stored as "network_colors" in extra_settings / domain defaults
+    colors = settings.get("network_colors") or settings.get("available_colors") or ["branca", "preta", "areia", "cinza"]
     return [str(c).strip().lower() for c in colors if str(c).strip()]
 
 
 def _build_mesh_types(company) -> list[str]:
     settings = _domain_settings(company)
-    meshes = settings.get("available_mesh_types") or ["3x3", "5x5", "10x10"]
+    # stored as "mesh_types" in extra_settings / domain defaults
+    meshes = settings.get("mesh_types") or settings.get("available_mesh_types") or ["3x3", "5x5", "10x10"]
     return [str(m).strip().lower().replace("×", "x") for m in meshes if str(m).strip()]
 
 
@@ -272,6 +274,16 @@ def _resolve_plant_choice(text: str, plant_names: list[str]) -> str | None:
     if not plant_names:
         return None
 
+    # pick_plant_N — interactive list reply ID
+    if text.startswith("pick_plant_"):
+        try:
+            idx = int(text.replace("pick_plant_", "", 1)) - 1
+            if 0 <= idx < len(plant_names):
+                return plant_names[idx]
+        except ValueError:
+            pass
+
+    # planta_{name} — legacy format
     if text.startswith("planta_"):
         candidate = text.replace("planta_", "", 1)
         for plant in plant_names:
@@ -470,32 +482,11 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
             show_measures = settings_data.get("show_measures_to_customer", True)
             context["show_measures_to_customer"] = show_measures
 
-            if not show_measures:
-                # Collect ALL items from ALL plants silently
-                plants_map = lookup_result.get("plants") or {}
-                if plants_map:
-                    all_raw: list[Any] = []
-                    for plant_items in plants_map.values():
-                        all_raw.extend(plant_items or [])
-                    if not all_raw:
-                        all_raw = lookup_result.get("items") or []
-                else:
-                    all_raw = lookup_result.get("items") or []
-                all_items = [_normalize_catalog_item(item) for item in all_raw]
-                context["address_items_available"] = all_items
-                context["selected_items"] = all_items
-                context["selected_item_ids"] = [item.get("selection_id") for item in all_items]
-                return _reply_text(
-                    conversation,
-                    db,
-                    text=_color_prompt(company),
-                    next_step="network_color",
-                    context=context,
-                )
-
             plants = lookup_result.get("plants", {}) or {}
             plant_names = list(plants.keys())
 
+            # Multiple plants → ALWAYS ask the client (plant names are always visible,
+            # regardless of show_measures_to_customer toggle)
             if len(plant_names) > 1:
                 context["address_plants"] = plant_names
                 context["selected_items"] = []
@@ -505,8 +496,8 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
                 for idx, plant in enumerate(plant_names[:10], start=1):
                     rows.append(
                         {
-                            "id": f"planta_{plant}",
-                            "title": f"{idx}) {plant}"[:24],
+                            "id": f"pick_plant_{idx}",
+                            "title": plant[:24],
                             "description": "",
                         }
                     )
@@ -515,13 +506,14 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
                     conversation,
                     db,
                     header="Escolha a planta",
-                    body="Esse endereço possui mais de uma planta. Qual opção é a sua?",
-                    button_text="Ver opções",
-                    sections=[{"title": "Plantas", "rows": rows}],
+                    body="Encontrei mais de uma planta para esse endereço.\nQual é a sua planta?",
+                    button_text="Ver plantas",
+                    sections=[{"title": "Plantas disponíveis", "rows": rows}],
                     next_step="plant_choice",
                     context=context,
                 )
 
+            # Single plant (or no plant grouping)
             chosen_plant = plant_names[0] if plant_names else None
             items = _items_from_catalog_lookup(lookup_result, chosen_plant)
             if not items:
@@ -543,11 +535,25 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
                     context=context,
                 )
 
-            context["address_items_available"] = items
+            all_items = [_normalize_catalog_item(i) for i in items]
+            context["address_items_available"] = all_items
+
+            if not show_measures:
+                # Auto-select all, skip measure list, go straight to color
+                context["selected_items"] = all_items
+                context["selected_item_ids"] = [i.get("selection_id") for i in all_items]
+                return _reply_text(
+                    conversation,
+                    db,
+                    text=_color_prompt(company),
+                    next_step="network_color",
+                    context=context,
+                )
+
             context["selected_items"] = []
             context["selected_item_ids"] = []
 
-            rows = _build_measure_rows(items)
+            rows = _build_measure_rows(all_items)
             rows.append({"id": "pick_manual", "title": "Informar manualmente", "description": ""})
             rows.append({"id": "pick_by_numbers", "title": "Escolher por números", "description": ""})
 
@@ -582,12 +588,20 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
 
     if current_step == "plant_choice":
         plant_names = context.get("address_plants") or []
+        show_measures = context.get("show_measures_to_customer", True)
         chosen_plant = _resolve_plant_choice(text, plant_names)
         if not chosen_plant:
-            return _reply_text(
+            # Re-show the plant list so the client can pick again
+            rows = []
+            for idx, plant in enumerate(plant_names[:10], start=1):
+                rows.append({"id": f"pick_plant_{idx}", "title": plant[:24], "description": ""})
+            return _reply_list(
                 conversation,
                 db,
-                text="Escolha uma planta pelas opções da lista ou digitando o número correspondente.",
+                header="Escolha a planta",
+                body="Não entendi. Escolha uma planta da lista ou digite o número correspondente.",
+                button_text="Ver plantas",
+                sections=[{"title": "Plantas disponíveis", "rows": rows}],
                 next_step="plant_choice",
                 context=context,
             )
@@ -610,11 +624,25 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
             )
 
         context["selected_plant"] = chosen_plant
-        context["address_items_available"] = items
+        all_items = [_normalize_catalog_item(i) for i in items]
+        context["address_items_available"] = all_items
+
+        if not show_measures:
+            # Plant chosen — auto-select all measures of this plant, jump to color
+            context["selected_items"] = all_items
+            context["selected_item_ids"] = [i.get("selection_id") for i in all_items]
+            return _reply_text(
+                conversation,
+                db,
+                text=_color_prompt(company),
+                next_step="network_color",
+                context=context,
+            )
+
         context["selected_items"] = []
         context["selected_item_ids"] = []
 
-        rows = _build_measure_rows(items)
+        rows = _build_measure_rows(all_items)
         rows.append({"id": "pick_manual", "title": "Informar manualmente", "description": ""})
         rows.append({"id": "pick_by_numbers", "title": "Escolher por números", "description": ""})
 
@@ -622,7 +650,7 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
             conversation,
             db,
             header="Itens encontrados",
-            body=f"Encontrei medidas salvas para a planta {chosen_plant}. Qual área você quer orçar?",
+            body=f"Planta: {chosen_plant}\nQual área você quer orçar?",
             button_text="Escolher",
             sections=[{"title": "Medidas", "rows": rows[:10]}],
             next_step="measure_selection",

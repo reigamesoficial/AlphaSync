@@ -1,0 +1,387 @@
+Quero implementar corretamente a funcionalidade de plantas e catálogo de medidas do domínio protection_network no AlphaSync.
+
+Leia antes de alterar:
+- models
+- repositories
+- schemas
+- endpoints
+- chatbot_flow.py
+- address_catalog.py
+- pricing.py
+- company settings
+- frontend atual
+
+Objetivo:
+implementar a feature completa de catálogo de medidas com suporte a plantas, integrada ao painel e ao fluxo do bot, sem quebrar a arquitetura atual.
+
+IMPORTANTE:
+- não refatore o projeto inteiro
+- preserve a arquitetura atual
+- mantenha isolamento multiempresa por company_id
+- implemente em etapas pequenas
+- primeiro analise o que já existe, depois aplique mudanças
+
+==================================================
+REGRA DE NEGÓCIO PRINCIPAL
+==================================================
+
+No domínio protection_network, o sistema deve permitir cadastrar:
+
+Endereço
+  -> Planta
+      -> Medidas
+
+Exemplos de plantas:
+- Sacada reta
+- Sacada em L
+- Apto 63 m²
+- Apto 86 m²
+- Apto 115 m²
+
+A planta é uma identificação do tipo/configuração do imóvel.
+Ela NÃO é cálculo automático.
+Ela deve ser cadastrada manualmente.
+
+==================================================
+REGRA DO BOT
+==================================================
+
+Quando o cliente enviar um endereço:
+
+1. O sistema deve buscar o endereço no catálogo
+2. Se não existir:
+   - seguir fluxo normal de coleta manual de medidas
+
+3. Se existir:
+   - verificar quantas plantas existem para o endereço
+
+CASO A — só existe 1 planta
+- usar automaticamente essa planta
+- seguir o fluxo do orçamento
+
+CASO B — existem 2 ou mais plantas
+- o bot deve perguntar ao cliente qual é a planta
+
+IMPORTANTE:
+O bot deve SEMPRE mostrar o nome da planta ao cliente.
+O nome da planta NÃO faz parte da regra de ocultação de medidas.
+
+Exemplo correto:
+
+"Encontrei mais de uma planta para esse endereço.
+
+Qual é a sua planta?"
+
+1) Sacada reta
+2) Sacada em L
+3) Apto 63 m²
+4) Apto 86 m²
+5) Apto 115 m²
+
+Depois que o cliente escolher:
+- carregar apenas as medidas da planta escolhida
+- seguir o fluxo normal
+
+==================================================
+REGRA DO TOGGLE
+==================================================
+
+Existe uma configuração:
+company_settings.extra_settings.protection_network.show_measures_to_customer
+
+Essa configuração controla apenas a exibição das medidas ao cliente.
+
+Se show_measures_to_customer = true:
+- o bot pode mostrar medidas
+- pode listar áreas
+- pode mostrar nomes de áreas
+- pode mostrar descrições
+- pode deixar o cliente escolher áreas
+
+Se show_measures_to_customer = false:
+- o bot NÃO pode mostrar medidas
+- NÃO pode mostrar lista de áreas
+- NÃO pode mostrar nomes de medidas
+- NÃO pode mostrar descrição de medidas
+- NÃO pode mostrar largura/altura
+- NÃO pode mostrar quantidade de áreas
+
+MAS, MESMO COM O TOGGLE DESLIGADO:
+- o bot DEVE continuar mostrando o nome da planta
+- o bot DEVE continuar perguntando qual planta o cliente possui
+- o bot DEVE continuar usando as medidas internamente para cálculo do orçamento
+
+Resumo:
+- planta = sempre pode aparecer
+- medidas = ocultar ou mostrar conforme toggle
+
+==================================================
+UX DO BOT — AJUSTE OBRIGATÓRIO
+==================================================
+
+Quero melhorar a UX do chatbot para plantas.
+
+Quando houver múltiplas plantas, o bot deve usar lista interativa do WhatsApp, quando possível.
+
+Exemplo de UX desejada:
+
+Mensagem:
+"Encontrei mais de uma planta para esse endereço.
+Qual é a sua planta?"
+
+Lista:
+- Sacada reta
+- Sacada em L
+- Apto 63 m²
+- Apto 86 m²
+- Apto 115 m²
+
+Se não for possível usar lista interativa:
+- aceitar resposta por número
+- aceitar resposta por texto
+- aceitar interactive.list_reply.id
+
+O fluxo deve aceitar:
+- 1
+- 2
+- pick_plant_1
+- nome da planta
+
+Depois da escolha:
+- salvar plant_id
+- salvar plant_name
+- carregar medidas da planta
+- continuar o fluxo
+
+==================================================
+BACKEND — IMPLEMENTAÇÃO
+==================================================
+
+Verifique se já existem tabelas/modelos para:
+- address catalog
+- plants
+- measure items
+
+Se faltar, implemente o que faltar.
+
+Estrutura esperada:
+
+AddressCatalog
+- id
+- company_id
+- raw_address
+- normalized_address
+- city
+- state
+- notes
+- is_active
+
+Plant
+- id
+- company_id
+- address_catalog_id
+- name
+- order_index
+- active
+
+AddressMeasureItem
+- id
+- company_id
+- address_catalog_id
+- plant_id nullable
+- description
+- width_m
+- height_m
+- quantity
+- notes
+- is_active
+
+Criar ou ajustar endpoints REST:
+
+GET    /api/v1/measures/addresses
+POST   /api/v1/measures/addresses
+PATCH  /api/v1/measures/addresses/{id}
+DELETE /api/v1/measures/addresses/{id}
+
+POST   /api/v1/measures/plants
+PATCH  /api/v1/measures/plants/{id}
+DELETE /api/v1/measures/plants/{id}
+
+POST   /api/v1/measures/items
+PATCH  /api/v1/measures/items/{id}
+DELETE /api/v1/measures/items/{id}
+
+GET /api/v1/measures/addresses deve retornar estrutura hierárquica:
+- endereço
+- plantas
+- medidas por planta
+
+Tudo sempre filtrado por company_id.
+
+Permissões:
+- vendedores podem visualizar
+- admins podem criar/editar/excluir
+
+==================================================
+FRONTEND — IMPLEMENTAÇÃO
+==================================================
+
+Criar a feature "Catálogo de Medidas" no painel, exclusiva para protection_network.
+
+Entrada no menu lateral:
+- mostrar "Medidas" apenas para empresas do domínio protection_network
+
+Tela /measures deve ter:
+
+1. Cabeçalho
+- título: Catálogo de Medidas
+- subtítulo explicativo
+- botão primário: Novo Endereço
+
+2. Cards de resumo
+- total de endereços
+- total de plantas
+- total de medidas
+
+3. Filtros
+- busca por endereço/cidade
+- filtro por cidade
+- filtro por estado
+
+4. Lista principal
+- accordion por endereço
+- dentro do endereço, plantas
+- dentro da planta, tabela de medidas
+
+5. Ações
+- novo endereço
+- nova planta
+- nova medida
+- editar
+- excluir
+
+6. Componentes visuais
+- Drawer para endereço
+- Modal para planta
+- Modal para medida
+- tabela bonita e compacta
+- badges de resumo
+- badges de status
+
+7. Campos de endereço
+- endereço bruto
+- endereço normalizado
+- cidade
+- estado
+- observações
+
+8. Campos de planta
+- nome da planta
+- ordem
+- status
+
+9. Campos de medida
+- descrição
+- largura
+- altura
+- quantidade
+- observações
+- planta vinculada ou sem planta
+
+10. Mostrar m² calculado no formulário de medida como campo visual:
+area_m2 = width_m * height_m * quantity
+
+==================================================
+CONFIGURAÇÕES DO DOMÍNIO
+==================================================
+
+Na tela de configurações da empresa, adicionar uma aba ou seção:
+Protection Network
+
+Campos:
+- preço padrão por m²
+- preço mínimo
+- taxa de visita
+- preços por malha
+- cores disponíveis
+- malhas disponíveis
+- toggle "Mostrar medidas para o cliente"
+
+Estrutura sugerida em extra_settings:
+{
+  "protection_network": {
+    "show_measures_to_customer": true,
+    "default_price_per_m2": 45,
+    "minimum_order_value": 150,
+    "visit_fee": 0,
+    "mesh_prices": {
+      "3x3": 50,
+      "5x5": 40
+    },
+    "available_colors": ["branca","preta","areia","cinza"],
+    "available_mesh_types": ["3x3","5x5"]
+  }
+}
+
+Se o toggle estiver desligado, mostrar banner amarelo:
+"⚠️ Medidas ocultadas do cliente — usadas apenas para cálculo interno."
+
+Criar ou ajustar endpoints:
+GET /api/v1/company/settings/protection-network
+PATCH /api/v1/company/settings/protection-network
+
+==================================================
+INTEGRAÇÃO COM O BOT
+==================================================
+
+A tela de medidas não é apenas administrativa.
+As medidas cadastradas precisam alimentar o orçamento automático do bot.
+
+Regra:
+- se o cliente mandar um endereço cadastrado
+- e houver medidas cadastradas
+- o bot deve usar essas medidas automaticamente
+
+Se houver múltiplas plantas:
+- primeiro perguntar a planta
+- depois usar medidas da planta escolhida
+
+Se show_measures_to_customer = true:
+- pode mostrar as medidas e permitir escolha de áreas
+
+Se false:
+- não mostra medidas, mas usa internamente
+
+==================================================
+ENTREGA
+==================================================
+
+Quero que você trabalhe em etapas:
+
+ETAPA 1
+- analisar o que já existe
+- listar models e endpoints reaproveitados
+- dizer o que falta implementar
+
+ETAPA 2
+- implementar backend das plantas e medidas
+- validar endpoints
+
+ETAPA 3
+- implementar integração do chatbot com plantas
+- validar fluxo do bot
+
+ETAPA 4
+- implementar frontend da tela Medidas
+- conectar com a API real
+
+ETAPA 5
+- implementar configurações Protection Network
+- conectar toggle ao comportamento do bot
+
+Ao final de cada etapa:
+- diga quais arquivos foram alterados
+- diga quais rotas/endpoints foram criados
+- valide funcionalmente
+
+Não faça tudo de uma vez sem mostrar o progresso.
