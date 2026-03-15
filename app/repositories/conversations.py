@@ -182,6 +182,25 @@ class ConversationsRepository(TenantRepository[Conversation]):
         self.db.refresh(conversation)
         return conversation
 
+    def count_company_conversations(
+        self,
+        company_id: int,
+        *,
+        status: ConversationStatus | None = None,
+        search: str | None = None,
+    ) -> int:
+        stmt = select(func.count()).select_from(Conversation).where(
+            Conversation.company_id == company_id
+        )
+        if status is not None:
+            stmt = stmt.where(Conversation.status == status)
+        if search:
+            term = f"%{search.strip()}%"
+            stmt = stmt.where(
+                or_(Conversation.phone.ilike(term), Conversation.subject.ilike(term))
+            )
+        return int(self.db.scalar(stmt) or 0)
+
 
 class ConversationMessagesRepository(TenantRepository[ConversationMessage]):
     def __init__(self, db: Session):

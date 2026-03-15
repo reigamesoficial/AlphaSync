@@ -119,3 +119,23 @@ class ClientsRepository(TenantRepository[Client]):
     def count_company_clients(self, company_id: int) -> int:
         stmt = select(func.count()).select_from(Client).where(Client.company_id == company_id)
         return int(self.db.scalar(stmt) or 0)
+
+    def count_company_clients_filtered(
+        self,
+        company_id: int,
+        *,
+        search: str | None = None,
+        status: ClientStatus | None = None,
+        lead_source: ClientLeadSource | None = None,
+    ) -> int:
+        stmt = select(func.count()).select_from(Client).where(Client.company_id == company_id)
+        if search:
+            term = f"%{search.strip()}%"
+            stmt = stmt.where(
+                or_(Client.name.ilike(term), Client.phone.ilike(term), Client.email.ilike(term))
+            )
+        if status is not None:
+            stmt = stmt.where(Client.status == status)
+        if lead_source is not None:
+            stmt = stmt.where(Client.lead_source == lead_source)
+        return int(self.db.scalar(stmt) or 0)

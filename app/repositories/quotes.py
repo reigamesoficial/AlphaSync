@@ -4,7 +4,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.models import Quote, QuoteItem, QuoteItemStatus, QuoteStatus
@@ -163,6 +163,20 @@ class QuotesRepository(TenantRepository[Quote]):
         self.db.flush()
         self.db.refresh(quote)
         return quote
+
+    def count_company_quotes(
+        self,
+        company_id: int,
+        *,
+        status: QuoteStatus | None = None,
+        client_id: int | None = None,
+    ) -> int:
+        stmt = select(func.count()).select_from(Quote).where(Quote.company_id == company_id)
+        if status is not None:
+            stmt = stmt.where(Quote.status == status)
+        if client_id is not None:
+            stmt = stmt.where(Quote.client_id == client_id)
+        return int(self.db.scalar(stmt) or 0)
 
 
 class QuoteItemsRepository(TenantRepository[QuoteItem]):
