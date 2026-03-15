@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+*.log
+.pythonlibs/
+storage/
+enderecos.db
+
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/

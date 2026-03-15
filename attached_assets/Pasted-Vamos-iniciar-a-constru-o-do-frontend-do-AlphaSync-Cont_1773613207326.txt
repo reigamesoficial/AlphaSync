@@ -1,0 +1,92 @@
+Vamos iniciar a construção do frontend do AlphaSync.
+
+Contexto:
+O backend já possui autenticação, multiempresa, e endpoints REST suficientes para iniciar o painel:
+
+* clients
+* conversations
+* quotes
+* dashboard summary
+* company settings
+
+Objetivo:
+Criar um frontend moderno estilo SaaS, com aparência profissional de startup, usando as APIs já prontas.
+
+Stack desejada:
+
+* React ou Next.js
+* TypeScript
+* Tailwind CSS
+* arquitetura organizada para crescer depois
+* consumo real da API já existente
+
+Importante:
+
+* não tente construir o sistema inteiro de uma vez
+* primeiro crie um MVP de painel moderno e funcional
+* foque em layout, navegação e integração com as rotas já prontas
+* mantenha o código limpo e escalável
+
+Quero que você faça primeiro estas entregas:
+
+1. estrutura base do frontend
+
+* layout principal
+* sidebar
+* topbar
+* autenticação/login
+* controle de sessão com JWT
+* proteção de rotas
+
+2. páginas iniciais integradas com a API
+
+* dashboard
+* clientes
+* conversas
+* orçamentos
+* configurações da empresa
+
+3. design visual
+   O frontend deve ter:
+
+* visual moderno
+* estilo SaaS premium
+* minimalista
+* escuro ou híbrido escuro/claro
+* UX profissional
+* cards, métricas, tabelas e painéis bem organizados
+
+4. comportamento esperado
+
+* login consome /api/v1/auth/login
+* dashboard consome /api/v1/dashboard/summary
+* clientes consomem /api/v1/clients
+* conversas consomem /api/v1/conversations
+* orçamentos consomem /api/v1/quotes
+* configurações consomem /api/v1/company/settings
+
+5. organização
+   Crie a base para expansão futura:
+
+* appointments
+* agenda
+* admin master
+* multiempresa completo
+* handoff humano
+* PDF
+* métricas avançadas
+
+Quero que você:
+
+1. analise as rotas já disponíveis
+2. proponha a estrutura do frontend
+3. implemente primeiro o MVP navegável
+4. conecte às APIs reais
+5. me mostre os arquivos criados e como rodar
+
+Regras:
+
+* não refatore o backend agora
+* não invente endpoints novos se os atuais já resolvem
+* se faltar algum endpoint mínimo, apenas aponte isso de forma objetiva
+* priorize um frontend bonito, profissional e funcional
