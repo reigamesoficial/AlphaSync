@@ -8,6 +8,7 @@ import Clients from './pages/Clients'
 import Conversations from './pages/Conversations'
 import Quotes from './pages/Quotes'
 import Settings from './pages/Settings'
+import Measures from './pages/Measures'
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
               <Route path="/clients" element={<Clients />} />
               <Route path="/conversations" element={<Conversations />} />
               <Route path="/quotes" element={<Quotes />} />
+              <Route path="/measures" element={<Measures />} />
               <Route path="/settings" element={<Settings />} />
             </Route>
           </Route>

@@ -142,3 +142,65 @@ export interface DashboardSummary {
     by_status: Record<string, number>
   }
 }
+
+export interface MeasureItem {
+  id: number
+  address_catalog_id: number
+  company_id: number
+  plant_id: number | null
+  label: string
+  width_m: number
+  height_m: number
+  quantity: number
+  notes: string | null
+  is_active: boolean
+  area_m2: number
+}
+
+export interface Plant {
+  id: number
+  address_catalog_id: number
+  company_id: number
+  name: string
+  sort_order: number
+  is_active: boolean
+}
+
+export interface PlantWithItems {
+  plant: Plant
+  items: MeasureItem[]
+}
+
+export interface Address {
+  id: number
+  company_id: number
+  raw_address: string
+  normalized_address: string
+  city: string | null
+  state: string | null
+  zipcode: string | null
+  notes: string | null
+  is_active: boolean
+}
+
+export interface AddressWithHierarchy {
+  address: Address
+  plants: PlantWithItems[]
+  direct_items: MeasureItem[]
+}
+
+export interface MeasureStats {
+  total_addresses: number
+  total_plants: number
+  total_items: number
+}
+
+export interface PNSettings {
+  show_measures_to_customer: boolean
+  default_price_per_m2: number
+  minimum_order_value: number
+  visit_fee: number
+  available_colors: string[]
+  available_mesh_types: string[]
+  mesh_prices: Record<string, number>
+}

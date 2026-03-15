@@ -7,14 +7,16 @@ import {
   Settings,
   Zap,
   ChevronRight,
+  Ruler,
 } from 'lucide-react'
 
 const nav = [
-  { to: '/dashboard',      label: 'Dashboard',   icon: LayoutDashboard },
-  { to: '/conversations',  label: 'Conversas',   icon: MessageSquare },
-  { to: '/clients',        label: 'Clientes',    icon: Users },
-  { to: '/quotes',         label: 'Orçamentos',  icon: FileText },
-  { to: '/settings',       label: 'Configurações', icon: Settings },
+  { to: '/dashboard',     label: 'Dashboard',     icon: LayoutDashboard },
+  { to: '/conversations', label: 'Conversas',     icon: MessageSquare },
+  { to: '/clients',       label: 'Clientes',      icon: Users },
+  { to: '/quotes',        label: 'Orçamentos',    icon: FileText },
+  { to: '/measures',      label: 'Medidas',       icon: Ruler },
+  { to: '/settings',      label: 'Configurações', icon: Settings },
 ]
 
 export default function Sidebar() {

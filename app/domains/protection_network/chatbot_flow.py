@@ -460,6 +460,23 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
         context["address_lookup_endereco_id"] = lookup_result["endereco_id"]
 
         if lookup_result["found"] and ((lookup_result.get("items") or []) or (lookup_result.get("plants") or {})):
+            settings_data = _domain_settings(company)
+            show_measures = settings_data.get("show_measures_to_customer", True)
+
+            if not show_measures:
+                all_raw = lookup_result.get("items") or []
+                all_items = [_normalize_catalog_item(item) for item in all_raw]
+                context["address_items_available"] = all_items
+                context["selected_items"] = all_items
+                context["selected_item_ids"] = [item.get("selection_id") for item in all_items]
+                return _reply_text(
+                    conversation,
+                    db,
+                    text="Encontrei dados para esse endereço e vou preparar o orçamento.",
+                    next_step="color_choice",
+                    context=context,
+                )
+
             plants = lookup_result.get("plants", {}) or {}
             plant_names = list(plants.keys())
 

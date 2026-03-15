@@ -1,0 +1,256 @@
+Agora vamos implementar a feature "Catálogo de Medidas" baseada na proposta de UX que você apresentou.
+
+Objetivo:
+Criar a funcionalidade completa no frontend e backend para cadastro e gestão de medidas por endereço/planta, exclusiva do domínio protection_network, mantendo compatibilidade com o chatbot e sistema de orçamentos.
+
+Antes de implementar:
+
+1. analise os models atuais do banco
+2. verifique se já existem tabelas para address_catalog, plant e address_measure_items
+3. reaproveite o que já existir
+4. apenas crie o que faltar
+
+IMPORTANTE:
+
+* não refatore o projeto inteiro
+* preserve a arquitetura atual
+* mantenha isolamento multiempresa por company_id
+
+---
+
+1. MODELOS DE DADOS
+
+Precisamos suportar a estrutura:
+
+Endereço
+└ Planta
+└ Medidas
+
+Estrutura esperada:
+
+AddressCatalog
+
+* id
+* company_id
+* raw_address
+* normalized_address
+* city
+* state
+* notes
+* created_at
+
+Plant
+
+* id
+* address_catalog_id
+* company_id
+* name
+* order_index
+* active
+
+AddressMeasureItem
+
+* id
+* company_id
+* address_catalog_id
+* plant_id (nullable)
+* description
+* width_m
+* height_m
+* quantity
+* notes
+* created_at
+
+Campo calculado (não persistido):
+area_m2 = width_m * height_m * quantity
+
+---
+
+2. ENDPOINTS BACKEND
+
+Criar endpoints REST em /api/v1/measures
+
+Endereços
+GET    /api/v1/measures/addresses
+POST   /api/v1/measures/addresses
+PATCH  /api/v1/measures/addresses/{id}
+DELETE /api/v1/measures/addresses/{id}
+
+Plantas
+POST   /api/v1/measures/plants
+PATCH  /api/v1/measures/plants/{id}
+DELETE /api/v1/measures/plants/{id}
+
+Medidas
+POST   /api/v1/measures/items
+PATCH  /api/v1/measures/items/{id}
+DELETE /api/v1/measures/items/{id}
+
+GET /api/v1/measures/addresses deve retornar estrutura hierárquica:
+
+[
+{
+"address": {...},
+"plants": [
+{
+"plant": {...},
+"items": [...]
+}
+]
+}
+]
+
+---
+
+3. PERMISSÕES
+
+Somente usuários da empresa podem acessar seus dados.
+
+Filtrar sempre por:
+
+company_id do JWT
+
+Regras:
+
+* vendedores podem visualizar
+* admins podem criar/editar/excluir
+
+---
+
+4. FRONTEND — TELA MEDIDAS
+
+Criar a página:
+
+/measures
+
+Com:
+
+Cards de resumo
+
+* total_enderecos
+* total_plantas
+* total_medidas
+
+Busca
+Filtros cidade / estado
+
+Lista Accordion de endereços
+
+Dentro do endereço:
+
+* plantas
+* medidas em tabela
+
+Ações:
+
+* novo endereço
+* nova planta
+* nova medida
+* editar
+* excluir
+
+Componentes:
+Drawer → endereço
+Modal → planta
+Modal → medida
+
+Campos do formulário de medida:
+
+* descrição
+* largura
+* altura
+* quantidade
+* observações
+* planta vinculada
+
+Mostrar m² calculado automaticamente no formulário.
+
+---
+
+5. CONFIGURAÇÕES DO DOMÍNIO
+
+Adicionar no backend:
+
+company_settings.extra_settings.protection_network
+
+Estrutura:
+
+{
+"show_measures_to_customer": true,
+"default_price_per_m2": 45,
+"minimum_order_value": 150,
+"visit_fee": 0,
+"mesh_prices": {
+"3x3": 50,
+"5x5": 40
+},
+"available_colors": ["branca","preta","areia","cinza"],
+"available_mesh_types": ["3x3","5x5"]
+}
+
+Criar endpoints:
+
+GET  /api/v1/company/settings/protection-network
+PATCH /api/v1/company/settings/protection-network
+
+---
+
+6. TOGGLE "Mostrar medidas para o cliente"
+
+Implementar regra no chatbot_flow do domínio protection_network.
+
+Fluxo:
+
+if show_measures_to_customer == false:
+
+* NÃO enviar lista de medidas
+* NÃO mencionar nome de áreas
+* NÃO mencionar quantidade de áreas
+* NÃO mostrar títulos de itens
+
+O bot ainda pode usar as medidas internamente para cálculo de orçamento.
+
+Mensagem sugerida quando medidas existem mas estão ocultas:
+
+"Encontrei dados para esse endereço e vou preparar o orçamento."
+
+---
+
+7. FRONTEND — CONFIGURAÇÕES PN
+
+Criar aba:
+
+Configurações → Protection Network
+
+Campos:
+
+Preço padrão por m²
+Preço mínimo
+Taxa de visita
+Preço por malha
+Cores disponíveis
+Malhas disponíveis
+
+Toggle:
+
+"Mostrar medidas para o cliente"
+
+Se desligado:
+mostrar banner amarelo:
+
+"⚠️ Medidas ocultadas do cliente — usadas apenas para cálculo interno."
+
+---
+
+8. ENTREGA
+
+Quero que você:
+
+1. liste os models criados ou reutilizados
+2. mostre os endpoints criados
+3. implemente primeiro backend
+4. depois conecte o frontend
+5. valide com chamadas reais da API
+6. confirme que o chatbot respeita o toggle
+
+Faça em etapas pequenas para evitar quebrar o sistema.

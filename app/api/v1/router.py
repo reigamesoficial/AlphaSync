@@ -7,6 +7,7 @@ from app.api.v1.endpoints import (
     company,
     conversations,
     dashboard,
+    measures,
     quotes,
     users,
     webhook,
@@ -22,4 +23,5 @@ api_router.include_router(clients.router)
 api_router.include_router(conversations.router)
 api_router.include_router(quotes.router)
 api_router.include_router(dashboard.router)
+api_router.include_router(measures.router)
 api_router.include_router(webhook.router)
