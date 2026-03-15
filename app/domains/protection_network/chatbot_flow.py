@@ -4,6 +4,8 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
+from sqlalchemy.orm.attributes import flag_modified
+
 from app.domains.protection_network.address_catalog import (
     AddressCatalog,
     format_measure_choice_title,
@@ -58,6 +60,7 @@ def _current_context(conversation) -> dict[str, Any]:
 def _save_state(conversation, db, *, next_step: str, context: dict[str, Any]) -> None:
     conversation.bot_step = next_step
     conversation.bot_context = context
+    flag_modified(conversation, "bot_context")
     db.flush()
 
 

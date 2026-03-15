@@ -143,6 +143,7 @@ class ConversationService:
 
         protected_list_keys = [
             "selected_items",
+            "selected_item_ids",
             "address_items_available",
             "manual_measurements",
             "quote_items_preview",
