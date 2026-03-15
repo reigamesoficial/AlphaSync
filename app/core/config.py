@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     database_url: str
     redis_url: str = "redis://localhost:6379/0"
 
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def fix_database_url(cls, value: str) -> str:
+        if isinstance(value, str) and value.startswith("postgresql://"):
+            return value.replace("postgresql://", "postgresql+psycopg2://", 1)
+        return value
+
     # ============================================================
     # CORS
     # ============================================================

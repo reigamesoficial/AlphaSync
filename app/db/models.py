@@ -709,10 +709,9 @@ class PNAddressCatalog(TimestampMixin, Base):
     company_id: Mapped[int] = mapped_column(
         ForeignKey("companies.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     raw_address: Mapped[str] = mapped_column(String(500), nullable=False)
-    normalized_address: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
+    normalized_address: Mapped[str] = mapped_column(String(500), nullable=False)
     zipcode: Mapped[str | None] = mapped_column(String(20), nullable=True)
     city: Mapped[str | None] = mapped_column(String(120), nullable=True)
     state: Mapped[str | None] = mapped_column(String(60), nullable=True)
@@ -755,12 +754,10 @@ class PNAddressPlant(TimestampMixin, Base):
     company_id: Mapped[int] = mapped_column(
         ForeignKey("companies.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     address_catalog_id: Mapped[int] = mapped_column(
         ForeignKey("pn_address_catalog.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -794,17 +791,14 @@ class PNAddressMeasurement(TimestampMixin, Base):
     company_id: Mapped[int] = mapped_column(
         ForeignKey("companies.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     address_catalog_id: Mapped[int] = mapped_column(
         ForeignKey("pn_address_catalog.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     plant_id: Mapped[int | None] = mapped_column(
         ForeignKey("pn_address_plants.id", ondelete="CASCADE"),
         nullable=True,
-        index=True,
     )
     label: Mapped[str] = mapped_column(String(200), nullable=False)
     width_m: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
@@ -830,17 +824,14 @@ class PNAddressJobRule(TimestampMixin, Base):
     company_id: Mapped[int] = mapped_column(
         ForeignKey("companies.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     address_catalog_id: Mapped[int] = mapped_column(
         ForeignKey("pn_address_catalog.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
     plant_id: Mapped[int | None] = mapped_column(
         ForeignKey("pn_address_plants.id", ondelete="CASCADE"),
         nullable=True,
-        index=True,
     )
     rule_type: Mapped[str] = mapped_column(String(100), nullable=False)
     rule_value: Mapped[str | None] = mapped_column(Text, nullable=True)
