@@ -1,0 +1,106 @@
+Antes de implementar a funcionalidade de catálogo de medidas do domínio protection_network, quero que você primeiro desenhe a estrutura da feature no frontend e me mostre a proposta.
+
+Contexto:
+
+* essa funcionalidade é exclusiva do domínio protection_network
+* precisa existir uma aba específica no painel da empresa
+* a tela deve ser moderna, bonita, completa e com UX profissional estilo SaaS premium
+* o objetivo é facilitar o cadastro e manutenção de medidas por endereço/planta
+
+Quero que você primeiro proponha a UX/UI da tela antes de codar tudo.
+
+Me entregue:
+
+1. Estrutura da página
+   Descreva como será a tela:
+
+* cabeçalho
+* filtros
+* busca
+* tabela ou cards
+* ações rápidas
+* modais ou drawers de cadastro/edição
+
+2. Fluxo de uso
+   Explique o fluxo ideal para o usuário:
+
+* cadastrar novo endereço
+* adicionar planta
+* adicionar medidas
+* editar medidas
+* localizar endereço já cadastrado
+* ver medidas agrupadas por endereço/planta
+
+3. Componentes visuais
+   Sugira os componentes:
+
+* tabela
+* accordion por endereço
+* tabs por planta
+* drawer lateral
+* modal
+* cards de resumo
+* indicadores rápidos
+
+4. Campos que precisam existir
+   Para endereço:
+
+* endereço bruto
+* endereço normalizado
+* cidade
+* estado
+* observações
+
+Para planta:
+
+* nome da planta
+* ordem
+* status
+
+Para medida:
+
+* descrição
+* largura
+* altura
+* quantidade
+* observações
+* planta vinculada ou medida direta no endereço
+
+5. Regras de produto
+   A tela deve ser exclusiva para protection_network.
+   No painel também deve existir um bloco de configurações do domínio com:
+
+* preço padrão por m²
+* preço mínimo
+* taxa de visita
+* preço por malha
+* cores disponíveis
+* malhas disponíveis
+* toggle "Mostrar medidas para o cliente"
+
+6. Regra obrigatória do toggle
+   Se "Mostrar medidas para o cliente" estiver:
+
+* ligado: o bot pode listar e exibir medidas no fluxo
+* desligado: o bot não pode exibir nenhuma medida ao cliente em hipótese nenhuma
+
+  * nem lista
+  * nem descrição
+  * nem nomes das áreas
+  * nem quantidade de áreas
+  * nem título de item
+
+Pode usar internamente para cálculo, mas não pode mostrar visualmente ao cliente.
+
+7. Entrega da proposta
+   Quero que você primeiro me entregue:
+
+* descrição visual da página
+* estrutura dos componentes
+* fluxo de navegação
+* sugestões de UX
+* como integrar isso ao menu atual do painel
+
+Não implemente tudo ainda.
+Primeiro me mostre a proposta bem pensada.
+Depois seguimos para a implementação incremental.
