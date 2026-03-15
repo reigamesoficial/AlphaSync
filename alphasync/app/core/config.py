@@ -1,1 +1,0 @@
-# AlphaSync placeholder
