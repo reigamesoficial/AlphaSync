@@ -1,0 +1,156 @@
+A implementação de DomainDefinition ficou pronta e funcional.
+
+Agora quero transformar a área /admin/domains em uma experiência premium de painel master, bonita e segura de usar.
+
+Objetivo:
+melhorar a UX/UI da administração de domínios do AlphaSync, reduzindo dependência do editor JSON cru e organizando a configuração por seções claras.
+
+Importante:
+
+* não refatorar a arquitetura
+* preservar backend já implementado
+* manter DomainDefinition e config_json como base
+* melhorar principalmente o frontend
+* só criar backend adicional se realmente faltar algo mínimo
+
+==================================================
+OBJETIVO DA TELA
+================
+
+A área /admin/domains deve permitir ao MASTER_ADMIN:
+
+* visualizar todos os domínios
+* entender rapidamente o status de cada um
+* editar configurações de forma guiada
+* usar JSON apenas como modo avançado
+
+==================================================
+ETAPA 1 — LISTA DE DOMÍNIOS
+===========================
+
+Melhorar a listagem dos domínios.
+
+Quero uma visualização premium com:
+
+* ícone
+* nome de exibição
+* key
+* badge builtin/custom
+* badge ativo/inativo
+* descrição curta
+* ação de editar
+
+Pode ser:
+
+* tabela premium
+  ou
+* cards responsivos
+  ou combinação das duas
+
+Adicionar cards de resumo no topo:
+
+* total de domínios
+* ativos
+* builtin
+* custom
+
+==================================================
+ETAPA 2 — DRAWER / DETALHE MELHOR
+=================================
+
+Melhorar o drawer de edição do domínio.
+
+Quero separar em abas:
+
+1. Geral
+
+* display_name
+* key (somente leitura para builtin)
+* descrição
+* ícone
+* ativo/inativo
+* builtin/custom
+
+2. Fluxo
+
+* mensagem inicial
+* mensagens de ajuda
+* mensagem de confirmação
+* fallback
+* tom da IA/humanização
+* labels configuráveis do bot
+
+3. Serviços
+
+* lista de serviços do domínio
+* ativar/desativar item
+* editar nome e descrição
+* ordenar itens se fizer sentido
+
+4. Pricing
+
+* preços padrão
+* taxas
+* mínimos
+* multiplicadores
+* pricing defaults por domínio
+
+5. Onboarding
+
+* defaults usados ao criar uma empresa com esse domínio
+* bot_name
+* quote_prefix
+* flags padrão
+* valores padrão
+
+6. JSON avançado
+
+* manter editor JSON completo para usuários avançados
+* mas como aba separada, não como experiência principal
+
+==================================================
+ETAPA 3 — UX E SEGURANÇA
+========================
+
+Quero uma UX segura para edição:
+
+* botão salvar só habilita quando houver mudanças
+* feedback visual claro de sucesso/erro
+* validações simples antes de salvar
+* warning antes de editar JSON avançado
+* layout consistente com o painel master
+* visual moderno estilo SaaS premium
+
+==================================================
+ETAPA 4 — CAMPOS GUIADOS
+========================
+
+Sempre que possível, trocar edição bruta de JSON por campos guiados.
+
+Exemplos:
+
+* switches para booleanos
+* tag inputs para listas
+* textareas para mensagens
+* arrays editáveis para serviços
+* inputs numéricos para defaults de preço
+
+O JSON avançado continua existindo, mas não deve ser a interface principal.
+
+==================================================
+ETAPA 5 — ENTREGA
+=================
+
+Quero que você:
+
+1. analise a implementação atual de /admin/domains
+2. proponha rapidamente a nova estrutura visual
+3. implemente a melhoria do frontend
+4. diga quais arquivos foram alterados
+5. valide a navegação e edição
+
+Importante:
+
+* preservar tudo que já funciona
+* focar em UX/UI
+* manter a base técnica atual
