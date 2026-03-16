@@ -1,0 +1,115 @@
+Vamos iniciar a Parte 4 do AlphaSync: hardening de produção e preparação de deploy.
+
+Contexto:
+O sistema já possui:
+
+* multiempresa validado
+* painel master
+* painel da empresa
+* painel do instalador
+* gestão de usuários por escopo
+* chatbot funcional
+* catálogo de medidas
+* agenda própria
+* PDF de orçamento
+
+Agora quero preparar o projeto para produção de forma séria.
+
+Objetivo:
+deixar o AlphaSync pronto para deploy em VPS com boa base operacional.
+
+==================================================
+ETAPA 1 — DATABASE E MIGRATIONS
+===============================
+
+Implementar Alembic no projeto.
+
+Quero:
+
+* configuração do Alembic
+* baseline inicial coerente com os models atuais
+* migrations para as tabelas já existentes
+* instruções claras para upgrade/downgrade
+
+==================================================
+ETAPA 2 — SERVIDOR DE PRODUÇÃO
+==============================
+
+Preparar execução para produção com:
+
+* Gunicorn + Uvicorn workers
+  ou outra configuração equivalente robusta
+* settings separadas para produção
+* startup estável
+
+==================================================
+ETAPA 3 — REDIS
+===============
+
+Adicionar Redis para usos operacionais adequados, por exemplo:
+
+* cache leve
+* rate limiting futuro
+* sessões temporárias do bot, se fizer sentido
+* estrutura preparada para filas futuras
+
+Não refatorar tudo agora.
+Só preparar a base corretamente.
+
+==================================================
+ETAPA 4 — DOCKER E NGINX
+========================
+
+Quero estrutura de deploy com:
+
+* Dockerfile backend
+* Dockerfile frontend se necessário
+* docker-compose.yml
+* Nginx reverse proxy
+* configuração de portas e proxy adequada
+
+==================================================
+ETAPA 5 — LOGS E MONITORAMENTO
+==============================
+
+Melhorar observabilidade com:
+
+* logs estruturados
+* logs por ambiente
+* logs de erro mais claros
+* preparação para Sentry ou similar
+* health endpoints úteis
+
+==================================================
+ETAPA 6 — SEGURANÇA E CONFIGURAÇÃO
+==================================
+
+Revisar:
+
+* variáveis obrigatórias
+* APP_ENV production
+* CORS de produção
+* SECRET_KEY forte
+* docs desabilitáveis em produção
+* cookies/headers se aplicável
+
+==================================================
+ETAPA 7 — ENTREGA
+=================
+
+Quero que você faça em etapas:
+
+1. analisar o estado atual do projeto para produção
+2. implementar Alembic
+3. preparar runtime de produção
+4. preparar Docker/Nginx/Redis
+5. melhorar logs e monitoramento
+6. me entregar um checklist final de deploy
+
+Importante:
+
+* não quebrar o que já está funcionando
+* preservar arquitetura atual
+* trabalhar incrementalmente
+* mostrar todos os arquivos criados ou alterados
+* me dizer exatamente como subir o projeto em VPS

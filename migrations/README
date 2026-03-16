@@ -1,0 +1,17 @@
+AlphaSync — Database Migrations (Alembic)
+=========================================
+
+Comandos principais:
+  alembic upgrade head              # Aplica todas as migrations pendentes
+  alembic downgrade -1              # Reverte a última migration
+  alembic revision --autogenerate -m "descricao"  # Gera nova migration
+  alembic history                   # Lista histórico de migrations
+  alembic current                   # Revision atual do banco
+  alembic stamp head                # Marca banco como atualizado sem rodar migrations
+  alembic upgrade head --sql        # Gera SQL sem aplicar (dry-run)
+
+Primeiro setup em banco novo:
+  alembic upgrade head
+
+Baseline em banco existente (tabelas já criadas por create_all):
+  alembic stamp head

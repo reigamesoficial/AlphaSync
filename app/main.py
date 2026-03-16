@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import json
 import logging
 import logging.config
 import sys
 import time
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api.v1.router import api_router
 from app.core.config import settings
@@ -14,17 +16,44 @@ from app.db.connection import Base, engine
 from app.db import models  # noqa: F401
 
 
-# ─── Logging setup ────────────────────────────────────────────────────────────
-logging.basicConfig(
-    level=getattr(logging, settings.log_level, logging.INFO),
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%Y-%m-%dT%H:%M:%S",
-    stream=sys.stdout,
-)
+# ─── Logging setup ─────────────────────────────────────────────────────────────
+class _JsonFormatter(logging.Formatter):
+    """Formata logs como JSON estruturado para produção."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        payload = {
+            "ts": self.formatTime(record, "%Y-%m-%dT%H:%M:%S"),
+            "level": record.levelname,
+            "logger": record.name,
+            "msg": record.getMessage(),
+        }
+        if record.exc_info:
+            payload["exc"] = self.formatException(record.exc_info)
+        return json.dumps(payload, ensure_ascii=False)
+
+
+def _configure_logging() -> None:
+    root = logging.getLogger()
+    root.setLevel(getattr(logging, settings.log_level, logging.INFO))
+
+    handler = logging.StreamHandler(sys.stdout)
+    if settings.is_production:
+        handler.setFormatter(_JsonFormatter())
+    else:
+        handler.setFormatter(
+            logging.Formatter(
+                "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+                datefmt="%Y-%m-%dT%H:%M:%S",
+            )
+        )
+    root.handlers = [handler]
+
+
+_configure_logging()
 logger = logging.getLogger("alphasync")
 
 
-# ─── App factory ──────────────────────────────────────────────────────────────
+# ─── App factory ───────────────────────────────────────────────────────────────
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
@@ -48,14 +77,75 @@ app.add_middleware(
 )
 
 
+# ─── Request-ID middleware ─────────────────────────────────────────────────────
+@app.middleware("http")
+async def add_request_id(request: Request, call_next):
+    import uuid
+    request_id = request.headers.get("X-Request-ID", str(uuid.uuid4())[:8])
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
+
+
 # ─── Routers ──────────────────────────────────────────────────────────────────
 app.include_router(api_router, prefix=settings.api_v1_prefix)
 
 
-# ─── Health ───────────────────────────────────────────────────────────────────
+# ─── Health endpoints ─────────────────────────────────────────────────────────
 @app.get("/health", tags=["health"])
 def health():
-    return {"status": "ok", "env": settings.app_env, "version": settings.app_version}
+    """
+    Healthcheck básico — usado por load balancers e containers.
+    Retorna 200 se o servidor está de pé.
+    """
+    return {
+        "status": "ok",
+        "env": settings.app_env,
+        "version": settings.app_version,
+    }
+
+
+@app.get("/health/full", tags=["health"])
+def health_full():
+    """
+    Healthcheck completo — verifica DB e Redis.
+    Retorna 200 se todos os serviços críticos estão saudáveis.
+    """
+    from app.db.connection import engine as _engine
+    from app.core.redis_client import redis_health
+    import sqlalchemy
+
+    # DB check
+    db_status: dict
+    try:
+        with _engine.connect() as conn:
+            conn.execute(sqlalchemy.text("SELECT 1"))
+        db_status = {"status": "ok"}
+    except Exception as exc:
+        logger.error("DB health check failed: %s", exc)
+        db_status = {"status": "unavailable", "error": str(exc)}
+
+    # Redis check
+    redis_status = redis_health()
+
+    overall = (
+        "ok"
+        if db_status["status"] == "ok" and redis_status["status"] == "ok"
+        else "degraded"
+    )
+
+    return JSONResponse(
+        status_code=200 if overall == "ok" else 207,
+        content={
+            "status": overall,
+            "env": settings.app_env,
+            "version": settings.app_version,
+            "services": {
+                "database": db_status,
+                "redis": redis_status,
+            },
+        },
+    )
 
 
 # ─── Startup ──────────────────────────────────────────────────────────────────
@@ -63,7 +153,7 @@ def health():
 def on_startup():
     _t0 = time.monotonic()
 
-    # 1. Criar tabelas
+    # 1. Criar tabelas (dev) / verificar (prod — preferir Alembic)
     Base.metadata.create_all(bind=engine)
     _tables = len(Base.metadata.tables)
 
@@ -93,7 +183,7 @@ def on_startup():
     logger.info(f"  Database  : {settings.masked_database_url}")
 
     if not settings.is_production:
-        logger.info(f"  Docs      : /docs  |  /redoc")
+        logger.info("  Docs      : /docs  |  /redoc")
 
     _warn_fragments = {"change_this", "changeme", "placeholder"}
     if any(f in settings.secret_key.lower() for f in _warn_fragments):

@@ -147,7 +147,17 @@ Master admin has `company_id = null` in JWT — cannot access tenant endpoints (
   - `frontend/src/pages/CompanyUsers.tsx` — new page: paginated table with search/role/status filters, right-side drawer (edit name/email/role, password reset, activate/deactivate), create modal
   - `frontend/src/components/layout/Sidebar.tsx` — added "Usuários" menu item (UserCog icon, /company-users route) only in adminNav (company_admin); sellerNav unchanged; also added logout button
   - `frontend/src/App.tsx` — added /company-users route under PrivateRoute allowedRoles=['company_admin']
-- [ ] Phase 4 remaining: Alembic migrations, Gunicorn production config
+- [x] Phase 4 (Parte 4 produção): Hardening, deploy e infraestrutura
+  - **Alembic**: `alembic.ini`, `migrations/env.py`, `migrations/script.py.mako`, `migrations/README`; baseline migration `daa5034677ed` gerado com `--autogenerate` e DB marcado com `alembic stamp head`
+  - **Gunicorn**: `gunicorn==23.0.0` adicionado ao `requirements.txt`; `gunicorn.conf.py` com UvicornWorkers, max_requests, graceful_timeout, configuração via env vars
+  - **Redis**: `app/core/redis_client.py` com pool de conexões, `redis_health()`, helpers `cache_get/set/delete`
+  - **Healthchecks**: `GET /health` (básico) e `GET /health/full` (DB + Redis, retorna 207 se degraded)
+  - **Logging**: `_JsonFormatter` para produção (JSON estruturado); texto legível para desenvolvimento; request-id middleware
+  - **Dockerfile**: multi-stage build (builder + runtime), usuário não-root, HEALTHCHECK nativo, CMD usa gunicorn
+  - **frontend/Dockerfile**: build Vite em node:20-alpine, serve estático com nginx; suporta React Router (try_files)
+  - **docker-compose.yml**: 6 serviços (postgres, redis, backend, frontend, nginx, migrations); healthchecks em todos; profiles para migrations; volumes nomeados
+  - **nginx/nginx.conf**: reverse proxy com rate limiting (api: 60r/m, auth: 10r/m), headers de segurança, SSL comentado pronto para ativar
+  - **DEPLOY.md**: guia completo de deploy em VPS (setup, first deploy, SSL, backups, atualizações, checklist de 15 itens)
 - [ ] Phase 5: Advanced analytics, reporting
 
 ## Notes
