@@ -140,6 +140,13 @@ Master admin has `company_id = null` in JWT — cannot access tenant endpoints (
   - `frontend/src/api/admin.ts` — added: getPlatformSettings, updatePlatformSettings, listUsers, getUser, createUser, updateUser + full TypeScript types
   - `frontend/src/pages/admin/AdminSettings.tsx` — rebuilt: form with 3 sections (Plataforma, Padrões, Suporte), toggle allow_self_signup, live dirty state, save button
   - `frontend/src/pages/admin/AdminUsers.tsx` — rebuilt: paginated table with search/role/company filters, right-side edit drawer (name/email/role/company/is_active), password reset, create modal, activate/deactivate action
+- [x] Phase 4 (Parte 4 SaaS): Company user management for COMPANY_ADMIN
+  - `app/api/v1/endpoints/company.py` — added: GET/POST/GET/{id}/PATCH/{id} for /company/users
+    - Always scoped by JWT company_id (get_tenant_company_id); cannot create master_admin; roles allowed: company_admin, seller, installer, viewer
+  - `frontend/src/api/companyUsers.ts` — new API client (listCompanyUsers, getCompanyUser, createCompanyUser, updateCompanyUser)
+  - `frontend/src/pages/CompanyUsers.tsx` — new page: paginated table with search/role/status filters, right-side drawer (edit name/email/role, password reset, activate/deactivate), create modal
+  - `frontend/src/components/layout/Sidebar.tsx` — added "Usuários" menu item (UserCog icon, /company-users route) only in adminNav (company_admin); sellerNav unchanged; also added logout button
+  - `frontend/src/App.tsx` — added /company-users route under PrivateRoute allowedRoles=['company_admin']
 - [ ] Phase 4 remaining: Alembic migrations, Gunicorn production config
 - [ ] Phase 5: Advanced analytics, reporting
 

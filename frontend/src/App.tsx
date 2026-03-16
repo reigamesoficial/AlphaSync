@@ -19,6 +19,7 @@ import AdminUsers from './pages/admin/AdminUsers'
 import AdminMetrics from './pages/admin/AdminMetrics'
 import AdminSettings from './pages/admin/AdminSettings'
 import InstallerSchedule from './pages/installer/InstallerSchedule'
+import CompanyUsers from './pages/CompanyUsers'
 
 function RootRedirect() {
   const { isAuthenticated, isLoading, user } = useAuth()
@@ -63,9 +64,10 @@ export default function App() {
               <Route path="/quotes" element={<Quotes />} />
               <Route path="/measures" element={<Measures />} />
               <Route path="/schedule" element={<Schedule />} />
-              {/* Configurações: apenas company_admin */}
+              {/* Rotas exclusivas para company_admin */}
               <Route element={<PrivateRoute allowedRoles={['company_admin']} />}>
                 <Route path="/settings" element={<Settings />} />
+                <Route path="/company-users" element={<CompanyUsers />} />
               </Route>
             </Route>
           </Route>

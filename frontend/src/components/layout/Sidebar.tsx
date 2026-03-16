@@ -9,26 +9,28 @@ import {
   ChevronRight,
   Ruler,
   CalendarDays,
+  UserCog,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 
 const adminNav = [
-  { to: '/dashboard',     label: 'Dashboard',     icon: LayoutDashboard },
-  { to: '/conversations', label: 'Conversas',     icon: MessageSquare },
-  { to: '/clients',       label: 'Clientes',      icon: Users },
-  { to: '/quotes',        label: 'Orçamentos',    icon: FileText },
-  { to: '/measures',      label: 'Medidas',       icon: Ruler },
-  { to: '/schedule',      label: 'Agenda',        icon: CalendarDays },
-  { to: '/settings',      label: 'Configurações', icon: Settings },
+  { to: '/dashboard',       label: 'Dashboard',     icon: LayoutDashboard },
+  { to: '/conversations',   label: 'Conversas',     icon: MessageSquare },
+  { to: '/clients',         label: 'Clientes',      icon: Users },
+  { to: '/quotes',          label: 'Orçamentos',    icon: FileText },
+  { to: '/measures',        label: 'Medidas',       icon: Ruler },
+  { to: '/schedule',        label: 'Agenda',        icon: CalendarDays },
+  { to: '/company-users',   label: 'Usuários',      icon: UserCog },
+  { to: '/settings',        label: 'Configurações', icon: Settings },
 ]
 
 const sellerNav = [
-  { to: '/dashboard',     label: 'Dashboard',     icon: LayoutDashboard },
-  { to: '/conversations', label: 'Conversas',     icon: MessageSquare },
-  { to: '/clients',       label: 'Clientes',      icon: Users },
-  { to: '/quotes',        label: 'Orçamentos',    icon: FileText },
-  { to: '/measures',      label: 'Medidas',       icon: Ruler },
-  { to: '/schedule',      label: 'Agenda',        icon: CalendarDays },
+  { to: '/dashboard',     label: 'Dashboard',   icon: LayoutDashboard },
+  { to: '/conversations', label: 'Conversas',   icon: MessageSquare },
+  { to: '/clients',       label: 'Clientes',    icon: Users },
+  { to: '/quotes',        label: 'Orçamentos',  icon: FileText },
+  { to: '/measures',      label: 'Medidas',     icon: Ruler },
+  { to: '/schedule',      label: 'Agenda',      icon: CalendarDays },
 ]
 
 const roleLabels: Record<string, string> = {
@@ -94,6 +96,13 @@ export default function Sidebar() {
               <p className="text-white text-xs font-medium truncate">{user?.name ?? '—'}</p>
               <p className="text-slate-500 text-[10px] truncate">{roleLabels[user?.role ?? ''] ?? user?.role}</p>
             </div>
+            <button
+              onClick={logout}
+              className="text-slate-600 hover:text-slate-400 transition-colors text-[10px] shrink-0"
+              title="Sair"
+            >
+              Sair
+            </button>
           </div>
         </div>
       </div>
