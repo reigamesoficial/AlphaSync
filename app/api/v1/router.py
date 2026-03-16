@@ -1,12 +1,15 @@
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
+    admin,
+    appointments,
     auth,
     clients,
     companies,
     company,
     conversations,
     dashboard,
+    installer,
     measures,
     quotes,
     users,
@@ -24,4 +27,7 @@ api_router.include_router(conversations.router)
 api_router.include_router(quotes.router)
 api_router.include_router(dashboard.router)
 api_router.include_router(measures.router)
+api_router.include_router(appointments.router)
+api_router.include_router(installer.router)
+api_router.include_router(admin.router)
 api_router.include_router(webhook.router)

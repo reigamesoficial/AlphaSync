@@ -1,9 +1,11 @@
+export type UserRole = 'master_admin' | 'company_admin' | 'seller' | 'installer' | 'viewer'
+
 export interface User {
   id: number
-  company_id: number
+  company_id: number | null
   name: string
   email: string
-  role: string
+  role: UserRole
   is_active: boolean
 }
 

@@ -1,8 +1,13 @@
 import { Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import type { UserRole } from '../types'
 
-export default function PrivateRoute() {
-  const { isAuthenticated, isLoading } = useAuth()
+interface Props {
+  allowedRoles?: UserRole[]
+}
+
+export default function PrivateRoute({ allowedRoles }: Props) {
+  const { isAuthenticated, isLoading, user } = useAuth()
 
   if (isLoading) {
     return (
@@ -12,5 +17,13 @@ export default function PrivateRoute() {
     )
   }
 
-  return isAuthenticated ? <Outlet /> : <Navigate to="/login" replace />
+  if (!isAuthenticated) return <Navigate to="/login" replace />
+
+  if (allowedRoles && user && !allowedRoles.includes(user.role)) {
+    if (user.role === 'master_admin') return <Navigate to="/admin" replace />
+    if (user.role === 'installer') return <Navigate to="/installer" replace />
+    return <Navigate to="/dashboard" replace />
+  }
+
+  return <Outlet />
 }

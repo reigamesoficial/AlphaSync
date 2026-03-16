@@ -266,6 +266,20 @@ def require_company_admin_or_master(
     return current_user
 
 
+def require_admin_seller_or_master(
+    current_user: User = Depends(
+        require_roles(UserRole.MASTER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.SELLER)
+    ),
+) -> User:
+    return current_user
+
+
+def require_installer(
+    current_user: User = Depends(require_roles(UserRole.INSTALLER)),
+) -> User:
+    return current_user
+
+
 def authenticate_user(db: Session, email: str, password: str) -> User | None:
     user = db.query(User).filter(User.email == email).first()
 

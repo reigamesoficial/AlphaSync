@@ -4,7 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.security import get_current_active_user, require_company_admin_or_master
+from app.core.security import (
+    get_current_active_user,
+    require_admin_seller_or_master,
+    require_company_admin_or_master,
+)
 from app.core.tenancy import get_tenant_company_id
 from app.db.connection import get_db
 from app.db.models import User
@@ -87,7 +91,7 @@ def list_addresses(
 def create_address(
     payload: AddressCreate,
     tenant_company_id: int = Depends(get_tenant_company_id),
-    current_user: User = Depends(require_company_admin_or_master),
+    current_user: User = Depends(require_admin_seller_or_master),
     db: Session = Depends(get_db),
 ) -> AddressWithHierarchy:
     repo = MeasuresRepository(db)
@@ -109,7 +113,7 @@ def update_address(
     address_id: int,
     payload: AddressUpdate,
     tenant_company_id: int = Depends(get_tenant_company_id),
-    current_user: User = Depends(require_company_admin_or_master),
+    current_user: User = Depends(require_admin_seller_or_master),
     db: Session = Depends(get_db),
 ) -> AddressWithHierarchy:
     repo = MeasuresRepository(db)
@@ -149,7 +153,7 @@ def delete_address(
 def create_plant(
     payload: PlantCreate,
     tenant_company_id: int = Depends(get_tenant_company_id),
-    current_user: User = Depends(require_company_admin_or_master),
+    current_user: User = Depends(require_admin_seller_or_master),
     db: Session = Depends(get_db),
 ) -> PlantResponse:
     repo = MeasuresRepository(db)
@@ -173,7 +177,7 @@ def update_plant(
     plant_id: int,
     payload: PlantUpdate,
     tenant_company_id: int = Depends(get_tenant_company_id),
-    current_user: User = Depends(require_company_admin_or_master),
+    current_user: User = Depends(require_admin_seller_or_master),
     db: Session = Depends(get_db),
 ) -> PlantResponse:
     repo = MeasuresRepository(db)
@@ -205,7 +209,7 @@ def delete_plant(
 def create_item(
     payload: ItemCreate,
     tenant_company_id: int = Depends(get_tenant_company_id),
-    current_user: User = Depends(require_company_admin_or_master),
+    current_user: User = Depends(require_admin_seller_or_master),
     db: Session = Depends(get_db),
 ) -> ItemResponse:
     repo = MeasuresRepository(db)
@@ -226,7 +230,7 @@ def update_item(
     item_id: int,
     payload: ItemUpdate,
     tenant_company_id: int = Depends(get_tenant_company_id),
-    current_user: User = Depends(require_company_admin_or_master),
+    current_user: User = Depends(require_admin_seller_or_master),
     db: Session = Depends(get_db),
 ) -> ItemResponse:
     repo = MeasuresRepository(db)

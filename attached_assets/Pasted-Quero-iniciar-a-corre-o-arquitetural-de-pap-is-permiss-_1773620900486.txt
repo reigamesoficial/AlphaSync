@@ -1,0 +1,378 @@
+Quero iniciar a correção arquitetural de papéis, permissões, painéis e agenda do AlphaSync com base na auditoria já concluída.
+
+Objetivo:
+separar corretamente a experiência de:
+- MASTER_ADMIN
+- COMPANY_ADMIN
+- SELLER
+- INSTALLER
+
+IMPORTANTE:
+- não refatore o projeto inteiro
+- preserve a arquitetura atual
+- implemente em etapas pequenas
+- preserve o painel operacional atual como base do COMPANY_ADMIN
+- mantenha tudo multiempresa por company_id
+- alinhe backend e frontend ao mesmo modelo de permissões
+
+==================================================
+REGRAS DE PAPEL
+==================================================
+
+1. MASTER_ADMIN
+É o admin da plataforma SaaS.
+Não deve ver o painel operacional de empresa.
+
+Deve ver:
+- empresas
+- admins das empresas
+- métricas globais
+- integrações globais
+- configurações SaaS
+- onboarding da plataforma
+
+Não deve ver:
+- conversas operacionais da empresa
+- clientes da empresa
+- orçamentos operacionais
+- medidas da empresa
+- agenda operacional da empresa
+
+2. COMPANY_ADMIN
+É o admin da empresa cliente.
+
+Deve ver:
+- dashboard da empresa
+- conversas
+- clientes
+- orçamentos
+- medidas
+- configurações da empresa
+- agenda da empresa
+- instaladores
+- vendedores
+
+3. SELLER
+É o vendedor da empresa.
+
+Deve ver:
+- dashboard operacional
+- conversas
+- clientes
+- orçamentos
+- medidas
+- agenda da empresa, conforme permissão operacional
+
+IMPORTANTE:
+O seller pode cadastrar e editar medidas.
+Ou seja:
+- pode visualizar catálogo de medidas
+- pode criar endereço
+- pode criar planta
+- pode criar medida
+- pode editar medida
+
+Pode ter restrição para excluir, se necessário, mas deve conseguir cadastrar e editar.
+
+4. INSTALLER
+É o instalador da empresa.
+
+Deve ver apenas:
+- agenda dele
+- nome do cliente
+- endereço completo
+- medidas do serviço
+- data e horário agendados
+- status do atendimento
+
+Não deve ver:
+- configurações
+- dashboard comercial
+- clientes gerais
+- conversas
+- empresas
+- métricas
+- painel master
+
+==================================================
+FASE 1 — FRONTEND ROLE-AWARE
+==================================================
+
+Implemente primeiro a separação do frontend por role.
+
+1. Tipagem do role no frontend
+Trocar role:string genérico por union type segura:
+- "master_admin"
+- "company_admin"
+- "seller"
+- "installer"
+- decidir depois o uso de "viewer"
+
+2. Sidebar dinâmica por role
+
+MASTER_ADMIN:
+- Empresas
+- Admins
+- Métricas
+- Integrações
+- Configurações SaaS
+
+COMPANY_ADMIN:
+- Dashboard
+- Conversas
+- Clientes
+- Orçamentos
+- Medidas (se domínio protection_network)
+- Agenda
+- Instaladores
+- Configurações
+
+SELLER:
+- Dashboard
+- Conversas
+- Clientes
+- Orçamentos
+- Medidas
+- Agenda
+- sem painel master
+
+INSTALLER:
+- Minha Agenda
+- Atendimentos
+- opcionalmente um detalhe do serviço
+- sem configurações
+- sem conversas
+- sem clientes globais
+- sem orçamentos comerciais
+- sem painel master
+
+3. Card do usuário na sidebar
+Parar de usar valores hardcoded.
+Ler nome, email e role do useAuth().user.
+
+4. PrivateRoute com allowedRoles
+Permitir bloquear rotas por role no frontend.
+
+==================================================
+FASE 2 — ROTAS DO FRONTEND
+==================================================
+
+Organizar rotas separadas por contexto:
+
+Painel master:
+- /admin
+- /admin/companies
+- /admin/users
+- /admin/metrics
+- /admin/settings
+
+Painel empresa:
+- /dashboard
+- /conversations
+- /clients
+- /quotes
+- /measures
+- /schedule
+- /installers
+- /settings
+
+Painel instalador:
+- /installer
+- /installer/schedule
+- /installer/jobs/:id
+
+Garantir:
+- MASTER_ADMIN não veja painel operacional da empresa por padrão
+- COMPANY_ADMIN não veja rotas /admin
+- SELLER não veja rotas /admin
+- INSTALLER só veja rotas do instalador
+
+==================================================
+FASE 3 — BACKEND MASTER
+==================================================
+
+Criar endpoints dedicados para master_admin usando require_master_admin:
+
+- GET /api/v1/admin/companies
+- POST /api/v1/admin/companies
+- PATCH /api/v1/admin/companies/{id}
+- GET /api/v1/admin/users
+- POST /api/v1/admin/users
+- GET /api/v1/admin/metrics
+
+Esses endpoints devem permitir:
+- listar empresas
+- criar empresa
+- editar status/plano/domínio
+- listar/criar admins de empresa
+- ver métricas globais da plataforma
+
+==================================================
+FASE 4 — AGENDA PRÓPRIA DO ALPHASYNC
+==================================================
+
+NÃO usar Google Calendar como núcleo da agenda.
+A agenda principal deve ser própria do AlphaSync.
+
+Objetivo:
+- agenda operacional interna
+- controle total pelo sistema
+- instaladores usando painel próprio
+
+A agenda deve ser baseada na tabela de appointments já existente ou ajustada, com suporte a:
+- client_id
+- quote_id
+- company_id
+- assigned_installer_id
+- address_raw
+- start_at
+- end_at
+- service_type
+- notes
+- status
+
+Se faltar campo, ajustar o model com cuidado.
+
+Criar endpoints REST para agenda da empresa:
+
+- GET /api/v1/appointments
+- GET /api/v1/appointments/{id}
+- POST /api/v1/appointments
+- PATCH /api/v1/appointments/{id}
+- PATCH /api/v1/appointments/{id}/status
+
+Regras:
+- COMPANY_ADMIN pode criar, editar e gerenciar agenda completa
+- SELLER pode criar e visualizar agendamentos operacionais conforme regra da empresa
+- INSTALLER só vê os atendimentos atribuídos a ele
+
+==================================================
+FASE 5 — PAINEL DO INSTALADOR
+==================================================
+
+Criar um painel próprio do instalador.
+
+Objetivo:
+mostrar apenas os dados necessários para a execução do serviço.
+
+Tela principal:
+- Minha Agenda
+
+Cada serviço deve mostrar:
+- nome do cliente
+- endereço completo
+- medidas do serviço
+- data/hora agendada
+- observações operacionais
+- status do atendimento
+
+O instalador deve conseguir:
+- visualizar próximos serviços
+- abrir detalhe do atendimento
+- marcar status:
+  - agendado
+  - em andamento
+  - concluído
+  - reagendado
+  - cancelado
+
+O instalador NÃO deve ver:
+- configurações
+- outras empresas
+- métricas comerciais
+- conversas do WhatsApp
+- lista global de clientes
+- painel master
+
+Criar endpoints para instalador:
+
+- GET /api/v1/installer/appointments
+- GET /api/v1/installer/appointments/{id}
+- PATCH /api/v1/installer/appointments/{id}/status
+
+Sempre filtrando por:
+- company_id do JWT
+- assigned_installer_id = usuário logado
+
+==================================================
+FASE 6 — CATÁLOGO DE MEDIDAS E PERMISSÕES
+==================================================
+
+Ajustar a regra do catálogo de medidas.
+
+No domínio protection_network:
+- COMPANY_ADMIN pode criar/editar/excluir
+- SELLER pode criar/editar
+- decidir se SELLER pode excluir ou não; se não puder, bloquear apenas exclusão
+- INSTALLER apenas visualiza medidas relacionadas ao atendimento dele, nunca o catálogo completo
+- MASTER_ADMIN não deve operar catálogo de medidas de empresa no painel operacional
+
+No frontend:
+- manter a aba "Medidas" para COMPANY_ADMIN e SELLER
+- ocultar para INSTALLER
+- ocultar do painel master
+
+==================================================
+FASE 7 — CONFIGURAÇÕES DO DOMÍNIO PROTECTION_NETWORK
+==================================================
+
+Manter a aba "Protection Network" nas configurações da empresa, mas apenas para:
+- COMPANY_ADMIN
+- opcionalmente SELLER se a empresa quiser permitir edição parcial
+- nunca para INSTALLER
+- nunca no painel master operacional
+
+Campos:
+- preço padrão por m²
+- preço mínimo
+- taxa de visita
+- preços por malha
+- cores disponíveis
+- malhas disponíveis
+- toggle "Mostrar medidas para o cliente"
+
+Regra do toggle:
+- controla apenas exibição das medidas ao cliente
+- não controla nome da planta
+- planta pode ser mostrada sempre
+- medidas podem ser ocultadas
+
+==================================================
+FASE 8 — ENTREGA
+==================================================
+
+Quero que você trabalhe em etapas e mostre progresso.
+
+ETAPA 1
+- corrigir tipagem de role no frontend
+- corrigir sidebar por role
+- corrigir PrivateRoute com allowedRoles
+
+ETAPA 2
+- criar rotas do painel master
+- criar estrutura de painel do instalador
+
+ETAPA 3
+- criar endpoints master
+- criar endpoints da agenda própria
+- criar endpoints do instalador
+
+ETAPA 4
+- alinhar permissões do catálogo de medidas
+- garantir seller com create/edit
+- garantir installer apenas leitura operacional do atendimento
+
+ETAPA 5
+- validar menus, roles, rotas e fluxo
+
+Ao final de cada etapa:
+- diga quais arquivos foram alterados
+- diga quais endpoints foram criados
+- diga quais menus cada role passou a ver
+- valide funcionalmente
+
+IMPORTANTE:
+- preserve o painel atual como base do COMPANY_ADMIN
+- não misture painel master com painel operacional
+- a agenda deve ser própria do AlphaSync
+- o instalador deve ter painel próprio e enxuto

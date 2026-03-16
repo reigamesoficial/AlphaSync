@@ -8,19 +8,46 @@ import {
   Zap,
   ChevronRight,
   Ruler,
+  CalendarDays,
 } from 'lucide-react'
+import { useAuth } from '../../context/AuthContext'
 
-const nav = [
+const adminNav = [
   { to: '/dashboard',     label: 'Dashboard',     icon: LayoutDashboard },
   { to: '/conversations', label: 'Conversas',     icon: MessageSquare },
   { to: '/clients',       label: 'Clientes',      icon: Users },
   { to: '/quotes',        label: 'Orçamentos',    icon: FileText },
   { to: '/measures',      label: 'Medidas',       icon: Ruler },
+  { to: '/schedule',      label: 'Agenda',        icon: CalendarDays },
   { to: '/settings',      label: 'Configurações', icon: Settings },
 ]
 
+const sellerNav = [
+  { to: '/dashboard',     label: 'Dashboard',     icon: LayoutDashboard },
+  { to: '/conversations', label: 'Conversas',     icon: MessageSquare },
+  { to: '/clients',       label: 'Clientes',      icon: Users },
+  { to: '/quotes',        label: 'Orçamentos',    icon: FileText },
+  { to: '/measures',      label: 'Medidas',       icon: Ruler },
+  { to: '/schedule',      label: 'Agenda',        icon: CalendarDays },
+]
+
+const roleLabels: Record<string, string> = {
+  master_admin: 'Master Admin',
+  company_admin: 'Administrador',
+  seller: 'Vendedor',
+  installer: 'Instalador',
+  viewer: 'Visualizador',
+}
+
 export default function Sidebar() {
   const location = useLocation()
+  const { user, logout } = useAuth()
+
+  const nav = user?.role === 'seller' ? sellerNav : adminNav
+
+  const initials = user?.name
+    ? user.name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase()
+    : '?'
 
   return (
     <aside className="w-60 shrink-0 bg-surface-800 border-r border-surface-600 flex flex-col h-full">
@@ -60,12 +87,12 @@ export default function Sidebar() {
       <div className="p-3 border-t border-surface-600">
         <div className="card p-3">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-full bg-brand-600/30 flex items-center justify-center text-brand-400 text-xs font-bold">
-              A
+            <div className="w-7 h-7 rounded-full bg-brand-600/30 flex items-center justify-center text-brand-400 text-xs font-bold shrink-0">
+              {initials}
             </div>
-            <div className="min-w-0">
-              <p className="text-white text-xs font-medium truncate">Admin</p>
-              <p className="text-slate-500 text-[10px] truncate">company_admin</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-white text-xs font-medium truncate">{user?.name ?? '—'}</p>
+              <p className="text-slate-500 text-[10px] truncate">{roleLabels[user?.role ?? ''] ?? user?.role}</p>
             </div>
           </div>
         </div>
