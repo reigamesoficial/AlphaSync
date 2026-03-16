@@ -941,3 +941,24 @@ class PlatformSettings(TimestampMixin, Base):
     public_app_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     logo_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     extra_flags: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+
+
+class DomainDefinition(TimestampMixin, Base):
+    """
+    Entidade administrável para cada domínio de serviço da plataforma.
+
+    - is_builtin=True  → domínio com motor em código (chatbot_flow.py, pricing_rules.py etc.)
+    - is_builtin=False → domínio customizado criado pelo master via painel (futuro)
+    - config_json      → configurações editáveis pelo master (textos, defaults, pricing simples)
+    """
+
+    __tablename__ = "domain_definitions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    key: Mapped[str] = mapped_column(String(60), nullable=False, unique=True, index=True)
+    display_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    icon: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_builtin: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    config_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)

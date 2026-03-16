@@ -1,0 +1,222 @@
+Agora precisamos evoluir a arquitetura de domínios do AlphaSync para que o painel MASTER_ADMIN consiga administrar os domínios de forma escalável.
+
+Contexto:
+Hoje os domínios já existem no código (protection_network, cleaning, electrician, hvac, pest_control, plumbing, glass_installation, security_cameras etc).
+O onboarding por domínio já foi adicionado.
+Agora precisamos transformar os domínios em entidades administráveis pelo painel master.
+
+Objetivo:
+Permitir que o MASTER_ADMIN consiga:
+
+* visualizar os domínios existentes
+* editar configurações padrão de cada domínio
+* editar textos e comportamento configurável do fluxo
+* definir defaults usados no onboarding de empresas
+* ativar/desativar domínios
+* preparar a plataforma para suportar novos domínios futuramente
+
+Importante:
+
+* não refatorar o projeto inteiro
+* preservar a arquitetura atual
+* não tentar mover toda a lógica de domínio para o banco
+* manter o motor principal dos domínios em código
+* tornar configurável via painel apenas o que for seguro e útil
+
+==================================================
+OBJETIVO ARQUITETURAL
+=====================
+
+Separar o conceito de domínio em duas camadas:
+
+1. Código do domínio
+
+* chatbot_flow.py
+* pricing_rules.py
+* products.py
+* validações e regras críticas
+
+2. Configuração administrável do domínio
+
+* nome de exibição
+* slug
+* ativo/inativo
+* defaults do onboarding
+* textos do bot
+* labels das perguntas
+* opções configuráveis
+* produtos/serviços padrão
+* pricing defaults
+* flags/toggles do domínio
+
+==================================================
+ETAPA 1 — MODELAGEM
+===================
+
+Criar uma estrutura persistente para domínios administráveis pelo master.
+
+Sugestão:
+DomainDefinition
+
+* id
+* key
+* display_name
+* is_active
+* is_builtin
+* config_json
+* created_at
+* updated_at
+
+Onde:
+
+* key = protection_network, cleaning, electrician etc.
+* is_builtin = true para domínios já existentes em código
+* config_json guarda configurações configuráveis do domínio
+
+Ajustar se já existir estrutura semelhante.
+
+==================================================
+ETAPA 2 — PAINEL MASTER DE DOMÍNIOS
+===================================
+
+Criar área no painel master:
+
+* /admin/domains
+* /admin/domains/{id} ou drawer/modal de detalhe
+
+Funções:
+
+* listar domínios
+* ativar/desativar
+* editar nome de exibição
+* editar defaults
+* editar configurações do domínio
+* editar textos do fluxo
+* ver se o domínio é builtin ou custom
+
+==================================================
+ETAPA 3 — CONFIGURAÇÕES EDITÁVEIS
+=================================
+
+Quero que o painel master consiga editar por domínio:
+
+1. Geral
+
+* display_name
+* ativo/inativo
+* descrição
+* ícone opcional
+
+2. Onboarding defaults
+
+* plano padrão sugerido
+* settings iniciais do domínio
+* flags iniciais
+
+3. Bot / fluxo
+
+* mensagem inicial
+* labels das perguntas
+* mensagens de ajuda
+* mensagens de confirmação
+* textos de fallback
+* tom padrão da IA/humanização
+
+4. Produtos/serviços
+
+* lista padrão de serviços
+* categorias/subcategorias
+* descrições padrão
+
+5. Pricing defaults
+
+* valores padrão
+* regras simples configuráveis
+* taxas mínimas
+* preços por categoria quando aplicável
+
+==================================================
+ETAPA 4 — LIMITES DO QUE É CONFIGURÁVEL
+=======================================
+
+Muito importante:
+não mover para o banco as regras críticas do motor.
+
+O painel master deve editar apenas o comportamento configurável.
+Exemplos do que continua em código:
+
+* state machine principal
+* cálculos complexos
+* regras críticas por domínio
+* integrações específicas
+* validações técnicas profundas
+
+Exemplos do que pode ir para configuração:
+
+* textos do bot
+* labels
+* lista de serviços
+* defaults
+* toggles
+* pricing simples
+* humanização
+
+==================================================
+ETAPA 5 — SUPORTE A NOVOS DOMÍNIOS
+==================================
+
+Precisamos preparar o sistema para novos domínios futuros.
+
+Quero suporte a dois tipos:
+
+1. Builtin domains
+
+* já existem em código
+* podem ser administrados pelo painel
+* continuam usando o motor próprio
+
+2. Custom domains (futuro)
+
+* criados pelo master
+* inicialmente com configuração simples
+* sem motor avançado
+* voltados para fluxos mais genéricos
+
+Por enquanto:
+implemente a base estrutural para suportar isso no futuro.
+Não precisa entregar um motor no-code completo agora.
+
+==================================================
+ETAPA 6 — INTEGRAÇÃO COM ONBOARDING
+===================================
+
+Ao criar uma empresa no painel master:
+
+* usar o domínio escolhido
+* carregar os defaults do DomainDefinition correspondente
+* aplicar esses defaults nas company_settings da empresa
+
+==================================================
+ETAPA 7 — ENTREGA
+=================
+
+Quero que você faça em etapas:
+
+1. analisar a estrutura atual dos domínios
+2. propor como persistir DomainDefinition
+3. implementar backend
+4. implementar painel master de domínios
+5. integrar ao onboarding
+6. mostrar:
+
+   * arquivos alterados
+   * endpoints criados
+   * páginas criadas
+   * o que ficou configurável via painel
+   * o que continua em código
+
+Importante:
+
+* não quebrar os domínios já existentes
+* preservar o que já funciona
+* implementar incrementalmente

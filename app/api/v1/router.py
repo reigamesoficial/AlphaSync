@@ -9,6 +9,7 @@ from app.api.v1.endpoints import (
     company,
     conversations,
     dashboard,
+    domain_definitions,
     installer,
     measures,
     quotes,
@@ -30,4 +31,5 @@ api_router.include_router(measures.router)
 api_router.include_router(appointments.router)
 api_router.include_router(installer.router)
 api_router.include_router(admin.router)
+api_router.include_router(domain_definitions.router)
 api_router.include_router(webhook.router)

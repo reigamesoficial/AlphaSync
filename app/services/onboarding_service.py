@@ -84,7 +84,14 @@ class OnboardingService:
         )
         self.db.flush()
 
-        defaults = get_domain_defaults(service_domain)
+        # Tenta usar o config_json do DomainDefinition; fallback para _DEFAULT_SETTINGS
+        try:
+            from app.services.domain_definition_service import DomainDefinitionService as _DDS
+            _dds_config = _DDS(self.db).get_onboarding_config(service_domain)
+            defaults = _dds_config if _dds_config else get_domain_defaults(service_domain)
+        except Exception:
+            defaults = get_domain_defaults(service_domain)
+
         settings = self.settings_repo.create_for_company(
             company_id=company.id,
             brand_name=name.strip(),

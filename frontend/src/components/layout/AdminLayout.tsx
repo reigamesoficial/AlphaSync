@@ -7,14 +7,16 @@ import {
   Zap,
   ChevronRight,
   LogOut,
+  Globe,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 
 const nav = [
-  { to: '/admin/companies', label: 'Empresas',       icon: Building2 },
-  { to: '/admin/users',     label: 'Usuários',       icon: Users },
-  { to: '/admin/metrics',   label: 'Métricas',       icon: BarChart3 },
-  { to: '/admin/settings',  label: 'Config. SaaS',  icon: Settings },
+  { to: '/admin/companies', label: 'Empresas',      icon: Building2 },
+  { to: '/admin/users',     label: 'Usuários',      icon: Users },
+  { to: '/admin/domains',   label: 'Domínios',      icon: Globe },
+  { to: '/admin/metrics',   label: 'Métricas',      icon: BarChart3 },
+  { to: '/admin/settings',  label: 'Config. SaaS', icon: Settings },
 ]
 
 export default function AdminLayout() {

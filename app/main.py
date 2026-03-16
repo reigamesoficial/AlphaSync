@@ -157,10 +157,22 @@ def on_startup():
     Base.metadata.create_all(bind=engine)
     _tables = len(Base.metadata.tables)
 
-    # 2. Contar rotas registradas
+    # 2. Sincronizar DomainDefinitions builtin
+    try:
+        from sqlalchemy.orm import Session as _Session
+        from app.services.domain_definition_service import DomainDefinitionService as _DDS
+        with _Session(engine) as _db:
+            _result = _DDS(_db).sync_builtin_domains()
+            _created = _result["created"]
+            _skipped = _result["skipped"]
+            logger.info(f"  Domínios  : {_created} criados, {_skipped} já existentes")
+    except Exception as _exc:
+        logger.warning(f"  Domínios  : sync falhou — {_exc}")
+
+    # 3. Contar rotas registradas
     _routes = sum(1 for r in app.routes if hasattr(r, "methods"))
 
-    # 3. Banner de startup
+    # 4. Banner de startup
     _elapsed = (time.monotonic() - _t0) * 1000
     _bar = "=" * 60
 

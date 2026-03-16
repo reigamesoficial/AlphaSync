@@ -18,6 +18,7 @@ import AdminCompanies from './pages/admin/AdminCompanies'
 import AdminUsers from './pages/admin/AdminUsers'
 import AdminMetrics from './pages/admin/AdminMetrics'
 import AdminSettings from './pages/admin/AdminSettings'
+import AdminDomains from './pages/admin/AdminDomains'
 import InstallerSchedule from './pages/installer/InstallerSchedule'
 import CompanyUsers from './pages/CompanyUsers'
 
@@ -45,6 +46,7 @@ export default function App() {
               <Route path="/admin/users" element={<AdminUsers />} />
               <Route path="/admin/metrics" element={<AdminMetrics />} />
               <Route path="/admin/settings" element={<AdminSettings />} />
+              <Route path="/admin/domains" element={<AdminDomains />} />
             </Route>
           </Route>
 

@@ -158,6 +158,18 @@ Master admin has `company_id = null` in JWT — cannot access tenant endpoints (
   - **docker-compose.yml**: 6 serviços (postgres, redis, backend, frontend, nginx, migrations); healthchecks em todos; profiles para migrations; volumes nomeados
   - **nginx/nginx.conf**: reverse proxy com rate limiting (api: 60r/m, auth: 10r/m), headers de segurança, SSL comentado pronto para ativar
   - **DEPLOY.md**: guia completo de deploy em VPS (setup, first deploy, SSL, backups, atualizações, checklist de 15 itens)
+- [x] Phase 7: DomainDefinition model + CRUD API + frontend `/admin/domains`
+  - **Model** (`app/db/models.py`): `DomainDefinition` table (key, display_name, description, icon, is_active, is_builtin, config_json JSON)
+  - **Repository** (`app/repositories/domain_definitions.py`): `DomainDefinitionsRepository` extends `BaseRepository`
+  - **Schema** (`app/schemas/domain_definitions.py`): `DomainDefinitionResponse`, `DomainDefinitionListItem`, `DomainDefinitionUpdate`, `DomainSyncResult`
+  - **Service** (`app/services/domain_definition_service.py`): `sync_builtin_domains()`, CRUD, `get_onboarding_config(key)`; full `config_json` defaults per domain (bot messages, services list, pricing defaults, onboarding defaults, labels)
+  - **API** (`app/api/v1/endpoints/domain_definitions.py`): 4 endpoints under `/admin/domains` (GET list, GET by key, PUT update, POST sync) — all require MASTER_ADMIN
+  - **Startup sync** (`app/main.py`): auto-seeds all 8 builtin domains on startup; idempotent (skips existing)
+  - **Onboarding integration** (`app/services/onboarding_service.py`): `bootstrap_company()` now uses `DomainDefinitionService.get_onboarding_config()` with fallback to static defaults
+  - **Frontend** (`frontend/src/pages/admin/AdminDomains.tsx`): table of all domains (icon, name, key, builtin badge, active pill, edit button); edit drawer with General tab (display_name, icon, description, is_active toggle) + Config JSON tab (live JSON editor with validation); Sync button
+  - **Navigation** (`frontend/src/components/layout/AdminLayout.tsx`): added "Domínios" nav link (Globe icon) between Usuários and Métricas
+  - **Route** (`frontend/src/App.tsx`): added `/admin/domains` route under AdminLayout
+  - **Backend** now has 73 HTTP routes, 16 DB tables
 - [x] Phase 6: Fluxos completos para todos os 7 domínios restantes
   - `app/domains/_shared/flow_helpers.py` — helpers compartilhados por todos os domínios
   - **cleaning**: chatbot_flow.py (9 etapas) + products.py + pricing_rules.py (R$180-1100)

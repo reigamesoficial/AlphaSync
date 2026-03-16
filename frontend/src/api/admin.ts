@@ -214,3 +214,58 @@ export async function getAdminMetrics(): Promise<Record<string, unknown>> {
   const { data } = await api.get('/admin/metrics')
   return data
 }
+
+// ============================================================
+// DOMAIN DEFINITIONS
+// ============================================================
+
+export interface DomainDefinitionListItem {
+  id: number
+  key: string
+  display_name: string
+  description: string | null
+  icon: string | null
+  is_active: boolean
+  is_builtin: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface DomainDefinitionDetail extends DomainDefinitionListItem {
+  config_json: Record<string, unknown>
+}
+
+export interface UpdateDomainPayload {
+  display_name?: string
+  description?: string | null
+  icon?: string | null
+  is_active?: boolean
+  config_json?: Record<string, unknown>
+}
+
+export interface DomainSyncResult {
+  synced: number
+  created: number
+  skipped: number
+  keys: string[]
+}
+
+export async function listDomains(): Promise<DomainDefinitionListItem[]> {
+  const { data } = await api.get<DomainDefinitionListItem[]>('/admin/domains')
+  return data
+}
+
+export async function getDomain(key: string): Promise<DomainDefinitionDetail> {
+  const { data } = await api.get<DomainDefinitionDetail>(`/admin/domains/${key}`)
+  return data
+}
+
+export async function updateDomain(key: string, payload: UpdateDomainPayload): Promise<DomainDefinitionDetail> {
+  const { data } = await api.put<DomainDefinitionDetail>(`/admin/domains/${key}`, payload)
+  return data
+}
+
+export async function syncDomains(): Promise<DomainSyncResult> {
+  const { data } = await api.post<DomainSyncResult>('/admin/domains/sync')
+  return data
+}
