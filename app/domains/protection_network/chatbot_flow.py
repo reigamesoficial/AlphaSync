@@ -539,13 +539,15 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
             context["address_items_available"] = all_items
 
             if not show_measures:
-                # Auto-select all, skip measure list, go straight to color
+                # Auto-select all, skip measure list, go straight to color.
+                # Plant name is always shown to the client (rule: plant name always visible).
                 context["selected_items"] = all_items
                 context["selected_item_ids"] = [i.get("selection_id") for i in all_items]
+                plant_prefix = f"Planta: *{chosen_plant}*\n\n" if chosen_plant else ""
                 return _reply_text(
                     conversation,
                     db,
-                    text=_color_prompt(company),
+                    text=plant_prefix + _color_prompt(company),
                     next_step="network_color",
                     context=context,
                 )
@@ -628,13 +630,14 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
         context["address_items_available"] = all_items
 
         if not show_measures:
-            # Plant chosen — auto-select all measures of this plant, jump to color
+            # Plant chosen — auto-select all measures of this plant, jump to color.
+            # Plant name is always shown to the client (rule: plant name always visible).
             context["selected_items"] = all_items
             context["selected_item_ids"] = [i.get("selection_id") for i in all_items]
             return _reply_text(
                 conversation,
                 db,
-                text=_color_prompt(company),
+                text=f"Planta: *{chosen_plant}*\n\n" + _color_prompt(company),
                 next_step="network_color",
                 context=context,
             )

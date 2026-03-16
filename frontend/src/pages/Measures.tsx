@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import {
-  MapPin, Plus, ChevronDown, ChevronRight, Pencil, Trash2,
-  LayoutGrid, Building2, Ruler, X, Search, AlertCircle, Layers,
+  MapPin, Plus, ChevronRight, Pencil, Trash2,
+  LayoutGrid, Building2, Ruler, X, Search, AlertCircle, Layers, Info,
 } from 'lucide-react'
 import Topbar from '../components/layout/Topbar'
 import { PageSpinner } from '../components/ui/Spinner'
@@ -20,15 +20,16 @@ type ModalType = 'address' | 'plant' | 'item' | null
 
 interface Toast { type: 'success' | 'error'; msg: string }
 
-function StatCard({ label, value, icon }: { label: string; value: number; icon: React.ReactNode }) {
+function StatCard({ label, value, icon, sub }: { label: string; value: number; icon: React.ReactNode; sub?: string }) {
   return (
     <div className="card p-5 flex items-center gap-4">
-      <div className="w-10 h-10 bg-brand-500/15 rounded-xl flex items-center justify-center text-brand-400 shrink-0">
+      <div className="w-11 h-11 bg-brand-500/15 rounded-xl flex items-center justify-center text-brand-400 shrink-0">
         {icon}
       </div>
       <div>
-        <p className="text-2xl font-bold text-white">{value}</p>
+        <p className="text-2xl font-bold text-white tabular-nums">{value}</p>
         <p className="text-slate-400 text-sm">{label}</p>
+        {sub && <p className="text-slate-600 text-xs mt-0.5">{sub}</p>}
       </div>
     </div>
   )
@@ -41,7 +42,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
       <div className="relative bg-surface-800 rounded-2xl border border-surface-600 w-full max-w-lg shadow-2xl">
         <div className="flex items-center justify-between p-5 border-b border-surface-600">
           <h3 className="text-white font-semibold">{title}</h3>
-          <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors">
+          <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors p-1 rounded-lg hover:bg-surface-700">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -58,7 +59,7 @@ function Drawer({ title, onClose, children }: { title: string; onClose: () => vo
       <div className="relative bg-surface-800 border-l border-surface-600 w-full max-w-md h-full flex flex-col shadow-2xl">
         <div className="flex items-center justify-between p-5 border-b border-surface-600 shrink-0">
           <h3 className="text-white font-semibold">{title}</h3>
-          <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors">
+          <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors p-1 rounded-lg hover:bg-surface-700">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -75,6 +76,10 @@ interface ItemForm { label: string; width_m: string; height_m: string; quantity:
 const emptyAddrForm: AddrForm = { raw_address: '', city: '', state: '', zipcode: '', notes: '' }
 const emptyPlantForm: PlantForm = { name: '', sort_order: '0' }
 const emptyItemForm: ItemForm = { label: '', width_m: '', height_m: '', quantity: '1', notes: '', plant_id: '' }
+
+function totalArea(items: MeasureItem[]): number {
+  return items.reduce((s, it) => s + Number(it.area_m2 ?? 0), 0)
+}
 
 export default function Measures() {
   const [stats, setStats] = useState<MeasureStats>({ total_addresses: 0, total_plants: 0, total_items: 0 })
@@ -127,31 +132,14 @@ export default function Measures() {
     })
   }
 
-  function openNewAddress() {
-    setEditingAddr(null)
-    setAddrForm(emptyAddrForm)
-    setModal('address')
-  }
-
+  function openNewAddress() { setEditingAddr(null); setAddrForm(emptyAddrForm); setModal('address') }
   function openEditAddress(entry: AddressWithHierarchy) {
     setEditingAddr(entry)
-    setAddrForm({
-      raw_address: entry.address.raw_address,
-      city: entry.address.city ?? '',
-      state: entry.address.state ?? '',
-      zipcode: entry.address.zipcode ?? '',
-      notes: entry.address.notes ?? '',
-    })
+    setAddrForm({ raw_address: entry.address.raw_address, city: entry.address.city ?? '', state: entry.address.state ?? '', zipcode: entry.address.zipcode ?? '', notes: entry.address.notes ?? '' })
     setModal('address')
   }
 
-  function openNewPlant(addressId: number) {
-    setEditingPlant(null)
-    setTargetAddressId(addressId)
-    setPlantForm(emptyPlantForm)
-    setModal('plant')
-  }
-
+  function openNewPlant(addressId: number) { setEditingPlant(null); setTargetAddressId(addressId); setPlantForm(emptyPlantForm); setModal('plant') }
   function openEditPlant(plant: Plant) {
     setEditingPlant(plant)
     setTargetAddressId(plant.address_catalog_id)
@@ -165,146 +153,75 @@ export default function Measures() {
     setItemForm({ ...emptyItemForm, plant_id: plantId ? String(plantId) : '' })
     setModal('item')
   }
-
   function openEditItem(item: MeasureItem) {
     setEditingItem(item)
     setTargetAddressId(item.address_catalog_id)
-    setItemForm({
-      label: item.label,
-      width_m: String(item.width_m),
-      height_m: String(item.height_m),
-      quantity: String(item.quantity),
-      notes: item.notes ?? '',
-      plant_id: item.plant_id ? String(item.plant_id) : '',
-    })
+    setItemForm({ label: item.label, width_m: String(item.width_m), height_m: String(item.height_m), quantity: String(item.quantity), notes: item.notes ?? '', plant_id: item.plant_id ? String(item.plant_id) : '' })
     setModal('item')
   }
 
-  function closeModal() {
-    setModal(null)
-    setEditingAddr(null)
-    setEditingPlant(null)
-    setEditingItem(null)
-    setTargetAddressId(null)
-  }
+  function closeModal() { setModal(null); setEditingAddr(null); setEditingPlant(null); setEditingItem(null); setTargetAddressId(null) }
 
   async function handleSaveAddress() {
     setSaving(true)
     try {
-      const payload = {
-        raw_address: addrForm.raw_address.trim(),
-        city: addrForm.city.trim() || undefined,
-        state: addrForm.state.trim() || undefined,
-        zipcode: addrForm.zipcode.trim() || undefined,
-        notes: addrForm.notes.trim() || undefined,
-      }
-      if (editingAddr) {
-        await updateAddress(editingAddr.address.id, payload)
-        showToast('success', 'Endereço atualizado.')
-      } else {
-        const created = await createAddress(payload)
-        setExpanded((prev) => new Set([...prev, created.address.id]))
-        showToast('success', 'Endereço criado.')
-      }
-      closeModal()
-      await loadData()
+      const payload = { raw_address: addrForm.raw_address.trim(), city: addrForm.city.trim() || undefined, state: addrForm.state.trim() || undefined, zipcode: addrForm.zipcode.trim() || undefined, notes: addrForm.notes.trim() || undefined }
+      if (editingAddr) { await updateAddress(editingAddr.address.id, payload); showToast('success', 'Endereço atualizado.') }
+      else { const created = await createAddress(payload); setExpanded((prev) => new Set([...prev, created.address.id])); showToast('success', 'Endereço criado.') }
+      closeModal(); await loadData()
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       showToast('error', msg || 'Erro ao salvar endereço.')
-    } finally {
-      setSaving(false)
-    }
+    } finally { setSaving(false) }
   }
 
   async function handleDeleteAddress(id: number) {
     if (!confirm('Excluir este endereço e todos os seus dados?')) return
-    try {
-      await deleteAddress(id)
-      showToast('success', 'Endereço removido.')
-      await loadData()
-    } catch {
-      showToast('error', 'Erro ao excluir endereço.')
-    }
+    try { await deleteAddress(id); showToast('success', 'Endereço removido.'); await loadData() }
+    catch { showToast('error', 'Erro ao excluir endereço.') }
   }
 
   async function handleSavePlant() {
     if (!targetAddressId) return
     setSaving(true)
     try {
-      if (editingPlant) {
-        await updatePlant(editingPlant.id, { name: plantForm.name.trim(), sort_order: Number(plantForm.sort_order) })
-        showToast('success', 'Planta atualizada.')
-      } else {
-        await createPlant({ address_catalog_id: targetAddressId, name: plantForm.name.trim(), sort_order: Number(plantForm.sort_order) })
-        showToast('success', 'Planta criada.')
-      }
-      closeModal()
-      await loadData()
+      if (editingPlant) { await updatePlant(editingPlant.id, { name: plantForm.name.trim(), sort_order: Number(plantForm.sort_order) }); showToast('success', 'Planta atualizada.') }
+      else { await createPlant({ address_catalog_id: targetAddressId, name: plantForm.name.trim(), sort_order: Number(plantForm.sort_order) }); showToast('success', 'Planta criada.') }
+      closeModal(); await loadData()
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       showToast('error', msg || 'Erro ao salvar planta.')
-    } finally {
-      setSaving(false)
-    }
+    } finally { setSaving(false) }
   }
 
   async function handleDeletePlant(id: number) {
     if (!confirm('Excluir esta planta e todas as suas medidas?')) return
-    try {
-      await deletePlant(id)
-      showToast('success', 'Planta removida.')
-      await loadData()
-    } catch {
-      showToast('error', 'Erro ao excluir planta.')
-    }
+    try { await deletePlant(id); showToast('success', 'Planta removida.'); await loadData() }
+    catch { showToast('error', 'Erro ao excluir planta.') }
   }
 
   async function handleSaveItem() {
     if (!targetAddressId) return
     setSaving(true)
     try {
-      const payload = {
-        address_catalog_id: targetAddressId,
-        plant_id: itemForm.plant_id ? Number(itemForm.plant_id) : null,
-        label: itemForm.label.trim(),
-        width_m: parseFloat(itemForm.width_m),
-        height_m: parseFloat(itemForm.height_m),
-        quantity: parseInt(itemForm.quantity),
-        notes: itemForm.notes.trim() || undefined,
-      }
-      if (editingItem) {
-        await updateItem(editingItem.id, payload)
-        showToast('success', 'Medida atualizada.')
-      } else {
-        await createItem(payload)
-        showToast('success', 'Medida criada.')
-      }
-      closeModal()
-      await loadData()
-    } catch {
-      showToast('error', 'Erro ao salvar medida.')
-    } finally {
-      setSaving(false)
-    }
+      const payload = { address_catalog_id: targetAddressId, plant_id: itemForm.plant_id ? Number(itemForm.plant_id) : null, label: itemForm.label.trim(), width_m: parseFloat(itemForm.width_m), height_m: parseFloat(itemForm.height_m), quantity: parseInt(itemForm.quantity), notes: itemForm.notes.trim() || undefined }
+      if (editingItem) { await updateItem(editingItem.id, payload); showToast('success', 'Medida atualizada.') }
+      else { await createItem(payload); showToast('success', 'Medida criada.') }
+      closeModal(); await loadData()
+    } catch { showToast('error', 'Erro ao salvar medida.') }
+    finally { setSaving(false) }
   }
 
   async function handleDeleteItem(id: number) {
     if (!confirm('Excluir esta medida?')) return
-    try {
-      await deleteItem(id)
-      showToast('success', 'Medida removida.')
-      await loadData()
-    } catch {
-      showToast('error', 'Erro ao excluir medida.')
-    }
+    try { await deleteItem(id); showToast('success', 'Medida removida.'); await loadData() }
+    catch { showToast('error', 'Erro ao excluir medida.') }
   }
 
   const targetEntry = targetAddressId ? addresses.find(e => e.address.id === targetAddressId) : null
-
-  const areaCalc =
-    itemForm.width_m && itemForm.height_m && itemForm.quantity
-      ? (parseFloat(itemForm.width_m || '0') * parseFloat(itemForm.height_m || '0') * parseInt(itemForm.quantity || '1')).toFixed(2)
-      : null
+  const areaCalc = itemForm.width_m && itemForm.height_m && itemForm.quantity
+    ? (parseFloat(itemForm.width_m || '0') * parseFloat(itemForm.height_m || '0') * parseInt(itemForm.quantity || '1')).toFixed(2)
+    : null
 
   if (loading) {
     return (
@@ -315,6 +232,11 @@ export default function Measures() {
     )
   }
 
+  const totalAreaAll = addresses.reduce((s, e) => {
+    const plantItems = e.plants.flatMap(pw => pw.items)
+    return s + totalArea([...plantItems, ...e.direct_items])
+  }, 0)
+
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
       <Topbar title="Catálogo de Medidas" subtitle="Endereços, plantas e medidas dos clientes" />
@@ -323,7 +245,7 @@ export default function Measures() {
         <div className="max-w-5xl space-y-5">
 
           {toast && (
-            <div className={`flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm ${
+            <div className={`flex items-center gap-2.5 px-4 py-3 rounded-xl text-sm font-medium ${
               toast.type === 'success'
                 ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
                 : 'bg-red-500/10 border border-red-500/20 text-red-400'
@@ -333,10 +255,11 @@ export default function Measures() {
             </div>
           )}
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-4 gap-4">
             <StatCard label="Endereços" value={stats.total_addresses} icon={<MapPin className="w-5 h-5" />} />
             <StatCard label="Plantas" value={stats.total_plants} icon={<Building2 className="w-5 h-5" />} />
             <StatCard label="Medidas" value={stats.total_items} icon={<Ruler className="w-5 h-5" />} />
+            <StatCard label="Área total" value={Math.round(totalAreaAll)} sub="m² cadastrados" icon={<LayoutGrid className="w-5 h-5" />} />
           </div>
 
           <div className="card p-4 flex flex-wrap items-center gap-3">
@@ -349,47 +272,44 @@ export default function Measures() {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <input
-              className="input w-40"
-              placeholder="Cidade"
-              value={filterCity}
-              onChange={(e) => setFilterCity(e.target.value)}
-            />
-            <select
-              className="input w-32"
-              value={filterState}
-              onChange={(e) => setFilterState(e.target.value)}
-            >
+            <input className="input w-40" placeholder="Cidade" value={filterCity} onChange={(e) => setFilterCity(e.target.value)} />
+            <select className="input w-32" value={filterState} onChange={(e) => setFilterState(e.target.value)}>
               <option value="">Estado</option>
               {BR_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
-            <div className="ml-auto">
-              <button onClick={openNewAddress} className="btn-primary flex items-center gap-2 whitespace-nowrap">
-                <Plus className="w-4 h-4" />
-                Novo endereço
-              </button>
-            </div>
+            <button onClick={openNewAddress} className="btn-primary flex items-center gap-2 whitespace-nowrap ml-auto">
+              <Plus className="w-4 h-4" />
+              Novo endereço
+            </button>
           </div>
 
           {addresses.length === 0 ? (
-            <div className="card p-12 text-center">
-              <MapPin className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-              <p className="text-slate-400 font-medium">Nenhum endereço cadastrado</p>
-              <p className="text-slate-600 text-sm mt-1">Clique em "Novo endereço" para começar.</p>
+            <div className="card p-16 text-center">
+              <div className="w-14 h-14 bg-surface-700 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <MapPin className="w-7 h-7 text-slate-500" />
+              </div>
+              <p className="text-white font-medium mb-1">Nenhum endereço cadastrado</p>
+              <p className="text-slate-500 text-sm">Clique em "Novo endereço" para começar a cadastrar o catálogo de medidas.</p>
             </div>
           ) : (
             <div className="space-y-3">
               {addresses.map((entry) => {
                 const isOpen = expanded.has(entry.address.id)
                 const plantCount = entry.plants.length
-                const itemCount = entry.plants.reduce((s, p) => s + p.items.length, 0) + entry.direct_items.length
+                const allItems = [...entry.plants.flatMap(pw => pw.items), ...entry.direct_items]
+                const itemCount = allItems.length
+                const area = totalArea(allItems)
+
                 return (
                   <div key={entry.address.id} className="card overflow-hidden">
-                    <button
+                    <div
+                      role="button"
+                      tabIndex={0}
                       onClick={() => toggleExpand(entry.address.id)}
-                      className="w-full flex items-center gap-3 p-4 hover:bg-surface-700/50 transition-colors text-left"
+                      onKeyDown={(e) => e.key === 'Enter' && toggleExpand(entry.address.id)}
+                      className="w-full flex items-center gap-3 p-4 hover:bg-surface-700/50 transition-colors cursor-pointer select-none"
                     >
-                      <div className={`transition-transform ${isOpen ? 'rotate-90' : ''}`}>
+                      <div className={`transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`}>
                         <ChevronRight className="w-4 h-4 text-slate-500" />
                       </div>
                       <MapPin className="w-4 h-4 text-brand-400 shrink-0" />
@@ -397,87 +317,120 @@ export default function Measures() {
                         <p className="text-white font-medium text-sm truncate">{entry.address.raw_address}</p>
                         {(entry.address.city || entry.address.state) && (
                           <p className="text-slate-500 text-xs">
-                            {[entry.address.city, entry.address.state].filter(Boolean).join(' / ')}
+                            {[entry.address.city, entry.address.state].filter(Boolean).join(' · ')}
                           </p>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-xs text-slate-500 bg-surface-700 px-2 py-0.5 rounded-full">
-                          {plantCount} planta{plantCount !== 1 ? 's' : ''} · {itemCount} medida{itemCount !== 1 ? 's' : ''}
-                        </span>
+                      <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-3 mr-1">
+                          <span className="text-xs text-slate-500">
+                            {plantCount} planta{plantCount !== 1 ? 's' : ''}
+                          </span>
+                          <span className="text-xs text-slate-500">
+                            {itemCount} medida{itemCount !== 1 ? 's' : ''}
+                          </span>
+                          {area > 0 && (
+                            <span className="text-xs text-brand-400 font-semibold tabular-nums">
+                              {area.toFixed(1)} m²
+                            </span>
+                          )}
+                        </div>
                         <button
-                          onClick={(e) => { e.stopPropagation(); openEditAddress(entry) }}
+                          onClick={() => openEditAddress(entry)}
                           className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-surface-600 transition-colors"
+                          title="Editar endereço"
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={(e) => { e.stopPropagation(); handleDeleteAddress(entry.address.id) }}
+                          onClick={() => handleDeleteAddress(entry.address.id)}
                           className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                          title="Excluir endereço"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
-                    </button>
+                    </div>
 
                     {isOpen && (
                       <div className="border-t border-surface-600 bg-surface-900/30">
-                        <div className="p-4 space-y-4">
-                          {entry.plants.map((pw) => (
-                            <div key={pw.plant.id} className="bg-surface-800 rounded-xl border border-surface-600 overflow-hidden">
-                              <div className="flex items-center gap-2 px-4 py-3 border-b border-surface-600">
-                                <Layers className="w-3.5 h-3.5 text-brand-400" />
-                                <span className="text-white text-sm font-medium flex-1">{pw.plant.name}</span>
-                                <span className="text-xs text-slate-600">ord. {pw.plant.sort_order}</span>
-                                <button
-                                  onClick={() => openNewItem(entry.address.id, pw.plant.id)}
-                                  className="flex items-center gap-1 text-xs text-brand-400 hover:text-brand-300 transition-colors px-2 py-1 rounded-lg hover:bg-brand-500/10"
-                                >
-                                  <Plus className="w-3 h-3" /> Medida
-                                </button>
-                                <button
-                                  onClick={() => openEditPlant(pw.plant)}
-                                  className="p-1.5 text-slate-500 hover:text-white hover:bg-surface-600 rounded-lg transition-colors"
-                                >
-                                  <Pencil className="w-3 h-3" />
-                                </button>
-                                <button
-                                  onClick={() => handleDeletePlant(pw.plant.id)}
-                                  className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
+                        <div className="p-4 space-y-3">
+
+                          {entry.plants.map((pw) => {
+                            const plantArea = totalArea(pw.items)
+                            return (
+                              <div key={pw.plant.id} className="bg-surface-800 rounded-xl border border-surface-600 overflow-hidden">
+                                <div className="flex items-center gap-2 px-4 py-2.5 border-b border-surface-600 bg-surface-750">
+                                  <Layers className="w-3.5 h-3.5 text-brand-400 shrink-0" />
+                                  <span className="text-white text-sm font-medium flex-1">{pw.plant.name}</span>
+                                  {plantArea > 0 && (
+                                    <span className="text-xs text-brand-400 font-semibold tabular-nums mr-2">
+                                      {plantArea.toFixed(1)} m²
+                                    </span>
+                                  )}
+                                  <span className="text-xs text-slate-600 mr-1">
+                                    {pw.items.length} medida{pw.items.length !== 1 ? 's' : ''}
+                                  </span>
+                                  <button
+                                    onClick={() => openNewItem(entry.address.id, pw.plant.id)}
+                                    className="flex items-center gap-1 text-xs text-brand-400 hover:text-brand-300 transition-colors px-2 py-1 rounded-lg hover:bg-brand-500/10"
+                                  >
+                                    <Plus className="w-3 h-3" /> Medida
+                                  </button>
+                                  <button
+                                    onClick={() => openEditPlant(pw.plant)}
+                                    className="p-1.5 text-slate-500 hover:text-white hover:bg-surface-600 rounded-lg transition-colors"
+                                    title="Editar planta"
+                                  >
+                                    <Pencil className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeletePlant(pw.plant.id)}
+                                    className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                                    title="Excluir planta"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                                {pw.items.length === 0 ? (
+                                  <div className="flex items-center gap-2 px-4 py-3 text-slate-600 text-xs">
+                                    <Info className="w-3.5 h-3.5 shrink-0" />
+                                    Nenhuma medida cadastrada nesta planta.
+                                  </div>
+                                ) : (
+                                  <ItemTable items={pw.items} onEdit={openEditItem} onDelete={handleDeleteItem} />
+                                )}
                               </div>
-                              {pw.items.length === 0 ? (
-                                <p className="text-slate-600 text-xs px-4 py-3">Nenhuma medida cadastrada nesta planta.</p>
-                              ) : (
-                                <ItemTable items={pw.items} onEdit={openEditItem} onDelete={handleDeleteItem} />
-                              )}
-                            </div>
-                          ))}
+                            )
+                          })}
 
                           {entry.direct_items.length > 0 && (
                             <div className="bg-surface-800 rounded-xl border border-surface-600 overflow-hidden">
-                              <div className="flex items-center gap-2 px-4 py-3 border-b border-surface-600">
-                                <Ruler className="w-3.5 h-3.5 text-slate-500" />
+                              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-surface-600">
+                                <Ruler className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                                 <span className="text-slate-400 text-sm font-medium flex-1">Medidas sem planta</span>
+                                {totalArea(entry.direct_items) > 0 && (
+                                  <span className="text-xs text-slate-400 font-semibold tabular-nums">
+                                    {totalArea(entry.direct_items).toFixed(1)} m²
+                                  </span>
+                                )}
                               </div>
                               <ItemTable items={entry.direct_items} onEdit={openEditItem} onDelete={handleDeleteItem} />
                             </div>
                           )}
 
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 pt-1">
                             <button
                               onClick={() => openNewPlant(entry.address.id)}
-                              className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white border border-surface-600 hover:border-surface-500 px-3 py-1.5 rounded-lg transition-colors"
+                              className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white border border-surface-600 hover:border-surface-500 hover:bg-surface-700/50 px-3 py-1.5 rounded-lg transition-colors"
                             >
                               <Plus className="w-3.5 h-3.5" /> Nova planta
                             </button>
                             <button
                               onClick={() => openNewItem(entry.address.id)}
-                              className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white border border-surface-600 hover:border-surface-500 px-3 py-1.5 rounded-lg transition-colors"
+                              className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white border border-surface-600 hover:border-surface-500 hover:bg-surface-700/50 px-3 py-1.5 rounded-lg transition-colors"
                             >
-                              <Plus className="w-3.5 h-3.5" /> Nova medida (sem planta)
+                              <Plus className="w-3.5 h-3.5" /> Nova medida sem planta
                             </button>
                           </div>
                         </div>
@@ -502,6 +455,10 @@ export default function Measures() {
                 value={addrForm.raw_address}
                 onChange={(e) => setAddrForm({ ...addrForm, raw_address: e.target.value })}
               />
+              <p className="text-slate-600 text-xs mt-1.5 flex items-center gap-1">
+                <Info className="w-3 h-3" />
+                O bot usa esse texto para encontrar o endereço pelo cliente.
+              </p>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -521,12 +478,16 @@ export default function Measures() {
               <input className="input" placeholder="01310-100" value={addrForm.zipcode} onChange={(e) => setAddrForm({ ...addrForm, zipcode: e.target.value })} />
             </div>
             <div>
-              <label className="block text-slate-400 text-sm font-medium mb-1.5">Observações</label>
+              <label className="block text-slate-400 text-sm font-medium mb-1.5">Observações internas</label>
               <textarea className="input min-h-[80px] resize-none" placeholder="Referências, complemento..." value={addrForm.notes} onChange={(e) => setAddrForm({ ...addrForm, notes: e.target.value })} />
             </div>
-            <button onClick={handleSaveAddress} disabled={saving || !addrForm.raw_address.trim()} className="btn-primary w-full flex items-center justify-center gap-2">
-              {saving ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Salvando...</> : 'Salvar endereço'}
-            </button>
+            <div className="flex gap-3 pt-1">
+              <button onClick={closeModal} className="btn-secondary flex-1">Cancelar</button>
+              <button onClick={handleSaveAddress} disabled={saving || !addrForm.raw_address.trim()} className="btn-primary flex-1 flex items-center justify-center gap-2">
+                {saving ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : null}
+                {saving ? 'Salvando...' : 'Salvar endereço'}
+              </button>
+            </div>
           </div>
         </Drawer>
       )}
@@ -536,17 +497,27 @@ export default function Measures() {
           <div className="space-y-4">
             <div>
               <label className="block text-slate-400 text-sm font-medium mb-1.5">Nome da planta *</label>
-              <input className="input" placeholder="Sala, Quarto 1, Cozinha..." value={plantForm.name} onChange={(e) => setPlantForm({ ...plantForm, name: e.target.value })} />
+              <input
+                className="input"
+                placeholder="Apto 101, Sala principal, Cozinha..."
+                value={plantForm.name}
+                onChange={(e) => setPlantForm({ ...plantForm, name: e.target.value })}
+                autoFocus
+              />
+              <p className="text-slate-600 text-xs mt-1.5 flex items-center gap-1">
+                <Info className="w-3 h-3" />
+                O nome da planta é sempre visível ao cliente no bot.
+              </p>
             </div>
             <div>
               <label className="block text-slate-400 text-sm font-medium mb-1.5">Ordem de exibição</label>
               <input className="input" type="number" min={0} value={plantForm.sort_order} onChange={(e) => setPlantForm({ ...plantForm, sort_order: e.target.value })} />
             </div>
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-3 pt-1">
               <button onClick={closeModal} className="btn-secondary flex-1">Cancelar</button>
               <button onClick={handleSavePlant} disabled={saving || !plantForm.name.trim()} className="btn-primary flex-1 flex items-center justify-center gap-2">
                 {saving ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : null}
-                Salvar
+                {saving ? 'Salvando...' : 'Salvar planta'}
               </button>
             </div>
           </div>
@@ -558,7 +529,7 @@ export default function Measures() {
           <div className="space-y-4">
             <div>
               <label className="block text-slate-400 text-sm font-medium mb-1.5">Descrição *</label>
-              <input className="input" placeholder="Ex: Janela da sala" value={itemForm.label} onChange={(e) => setItemForm({ ...itemForm, label: e.target.value })} />
+              <input className="input" placeholder="Ex: Janela da sala" value={itemForm.label} onChange={(e) => setItemForm({ ...itemForm, label: e.target.value })} autoFocus />
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div>
@@ -575,9 +546,9 @@ export default function Measures() {
               </div>
             </div>
             {areaCalc && (
-              <div className="bg-brand-500/10 border border-brand-500/20 rounded-lg px-3 py-2 flex items-center justify-between">
+              <div className="bg-brand-500/10 border border-brand-500/20 rounded-xl px-4 py-3 flex items-center justify-between">
                 <span className="text-slate-400 text-sm">Área calculada</span>
-                <span className="text-brand-400 font-semibold">{areaCalc} m²</span>
+                <span className="text-brand-300 font-bold text-lg tabular-nums">{areaCalc} m²</span>
               </div>
             )}
             {targetEntry && targetEntry.plants.length > 0 && (
@@ -595,7 +566,7 @@ export default function Measures() {
               <label className="block text-slate-400 text-sm font-medium mb-1.5">Observações</label>
               <input className="input" placeholder="Opcional" value={itemForm.notes} onChange={(e) => setItemForm({ ...itemForm, notes: e.target.value })} />
             </div>
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-3 pt-1">
               <button onClick={closeModal} className="btn-secondary flex-1">Cancelar</button>
               <button
                 onClick={handleSaveItem}
@@ -603,7 +574,7 @@ export default function Measures() {
                 className="btn-primary flex-1 flex items-center justify-center gap-2"
               >
                 {saving ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : null}
-                Salvar
+                {saving ? 'Salvando...' : 'Salvar medida'}
               </button>
             </div>
           </div>
@@ -618,36 +589,37 @@ function ItemTable({ items, onEdit, onDelete }: {
   onEdit: (item: MeasureItem) => void
   onDelete: (id: number) => void
 }) {
+  const total = items.reduce((s, it) => s + Number(it.area_m2 ?? 0), 0)
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-surface-600">
-            <th className="text-left text-slate-500 font-medium px-4 py-2">Descrição</th>
-            <th className="text-right text-slate-500 font-medium px-3 py-2">L (m)</th>
-            <th className="text-right text-slate-500 font-medium px-3 py-2">A (m)</th>
-            <th className="text-right text-slate-500 font-medium px-3 py-2">Qtd</th>
-            <th className="text-right text-slate-500 font-medium px-3 py-2">m²</th>
+          <tr className="border-b border-surface-700">
+            <th className="text-left text-slate-500 font-medium px-4 py-2 text-xs">Descrição</th>
+            <th className="text-right text-slate-500 font-medium px-3 py-2 text-xs">L (m)</th>
+            <th className="text-right text-slate-500 font-medium px-3 py-2 text-xs">A (m)</th>
+            <th className="text-right text-slate-500 font-medium px-3 py-2 text-xs">Qtd</th>
+            <th className="text-right text-slate-500 font-medium px-3 py-2 text-xs">m²</th>
             <th className="px-3 py-2 w-16" />
           </tr>
         </thead>
         <tbody>
           {items.map((item) => (
-            <tr key={item.id} className="border-b border-surface-700 last:border-0 hover:bg-surface-700/30 group">
+            <tr key={item.id} className="border-b border-surface-700/50 last:border-0 hover:bg-surface-700/20 group transition-colors">
               <td className="px-4 py-2.5">
-                <p className="text-white">{item.label}</p>
-                {item.notes && <p className="text-slate-600 text-xs truncate max-w-[200px]">{item.notes}</p>}
+                <p className="text-white text-sm">{item.label}</p>
+                {item.notes && <p className="text-slate-600 text-xs truncate max-w-[200px] mt-0.5">{item.notes}</p>}
               </td>
-              <td className="px-3 py-2.5 text-right text-slate-300 font-mono text-xs">{Number(item.width_m).toFixed(2)}</td>
-              <td className="px-3 py-2.5 text-right text-slate-300 font-mono text-xs">{Number(item.height_m).toFixed(2)}</td>
-              <td className="px-3 py-2.5 text-right text-slate-300">{item.quantity}</td>
-              <td className="px-3 py-2.5 text-right text-brand-400 font-semibold font-mono text-xs">{Number(item.area_m2).toFixed(2)}</td>
+              <td className="px-3 py-2.5 text-right text-slate-300 font-mono text-xs tabular-nums">{Number(item.width_m).toFixed(2)}</td>
+              <td className="px-3 py-2.5 text-right text-slate-300 font-mono text-xs tabular-nums">{Number(item.height_m).toFixed(2)}</td>
+              <td className="px-3 py-2.5 text-right text-slate-400 text-xs">{item.quantity}</td>
+              <td className="px-3 py-2.5 text-right text-brand-400 font-semibold font-mono text-xs tabular-nums">{Number(item.area_m2).toFixed(2)}</td>
               <td className="px-3 py-2.5">
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity justify-end">
-                  <button onClick={() => onEdit(item)} className="p-1 text-slate-500 hover:text-white rounded transition-colors">
+                  <button onClick={() => onEdit(item)} className="p-1.5 text-slate-500 hover:text-white rounded-lg hover:bg-surface-600 transition-colors">
                     <Pencil className="w-3 h-3" />
                   </button>
-                  <button onClick={() => onDelete(item.id)} className="p-1 text-slate-500 hover:text-red-400 rounded transition-colors">
+                  <button onClick={() => onDelete(item.id)} className="p-1.5 text-slate-500 hover:text-red-400 rounded-lg hover:bg-red-500/10 transition-colors">
                     <Trash2 className="w-3 h-3" />
                   </button>
                 </div>
@@ -655,6 +627,15 @@ function ItemTable({ items, onEdit, onDelete }: {
             </tr>
           ))}
         </tbody>
+        {items.length > 1 && (
+          <tfoot>
+            <tr className="border-t border-surface-600">
+              <td colSpan={4} className="px-4 py-2 text-xs text-slate-500 font-medium">Total</td>
+              <td className="px-3 py-2 text-right text-brand-300 font-bold font-mono text-xs tabular-nums">{total.toFixed(2)}</td>
+              <td />
+            </tr>
+          </tfoot>
+        )}
       </table>
     </div>
   )
