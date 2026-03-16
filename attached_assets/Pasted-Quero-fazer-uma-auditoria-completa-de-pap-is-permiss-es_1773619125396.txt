@@ -1,0 +1,102 @@
+Quero fazer uma auditoria completa de papéis, permissões e painéis do AlphaSync antes de continuar implementações novas.
+
+Contexto:
+Hoje o painel exibido mostra:
+
+* Dashboard
+* Conversas
+* Clientes
+* Orçamentos
+* Medidas
+* Configurações
+
+Isso parece correto para admin da empresa / admin de vendas, mas não para o admin master da plataforma SaaS.
+
+Precisamos verificar se existe confusão entre:
+
+* admin master SaaS
+* admin da empresa
+* vendedor
+
+Objetivo da auditoria:
+identificar exatamente como os papéis estão modelados hoje no backend e como o frontend decide o menu e o escopo de cada usuário.
+
+Quero que você faça a auditoria em 4 partes:
+
+1. BACKEND
+   Analise:
+
+* models de users, companies, auth
+* enums de roles
+* middlewares/dependencies de autenticação
+* endpoints protegidos
+* regras de company_id
+* qualquer distinção entre master admin e company admin
+
+Responda:
+
+* quais roles existem hoje
+* o que cada role pode acessar
+* se existe ou não separação real entre admin master e admin da empresa
+
+2. FRONTEND
+   Analise:
+
+* layout
+* sidebar
+* guards de rota
+* lógica de sessão/autorização
+* páginas disponíveis por usuário
+
+Responda:
+
+* quais menus estão sendo mostrados para cada role
+* se o frontend está tratando company_admin como se fosse master
+* se existe ou não painel separado para admin master
+
+3. ARQUITETURA ESPERADA
+   Proponha a separação correta entre:
+
+Admin Master SaaS:
+
+* empresas
+* onboarding
+* planos
+* integrações
+* usuários admins
+* métricas globais
+* sem conversas/clientes/orçamentos operacionais
+
+Admin da Empresa:
+
+* dashboard da empresa
+* conversas
+* clientes
+* orçamentos
+* medidas
+* configurações da empresa
+* agenda
+
+Vendedor:
+
+* conversas
+* clientes
+* orçamentos
+* agenda
+* acesso limitado ao catálogo de medidas conforme regra
+
+4. RELATÓRIO FINAL
+   Quero um relatório objetivo com:
+
+* o que existe hoje
+* o que está errado ou misturado
+* o que falta para separar corretamente os painéis
+* quais arquivos precisariam ser alterados
+* qual seria a ordem ideal de correção
+
+Importante:
+
+* não implemente ainda
+* primeiro apenas audite
+* não refatore ainda
+* entregue diagnóstico antes de mudar qualquer coisa
