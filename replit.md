@@ -125,7 +125,8 @@ Master admin has `company_id = null` in JWT — cannot access tenant endpoints (
 - [x] Phase 3: Measures.tsx UX premium (fixed nested button bug, area totals per plant, stat cards)
 - [x] Phase 3: Schedule.tsx rebuilt (stats, filter tabs, new appointment modal)
 - [x] Phase 3: InstallerSchedule.tsx rebuilt (today/upcoming sections, status actions, expandable cards)
-- [ ] Phase 4: PDF generation, Alembic migrations, Gunicorn production config
+- [x] Phase 4: PDF generation (reportlab, GET /quotes/{id}/pdf, POST /quotes/{id}/generate-pdf, Quotes.tsx detail drawer with PDF download + status actions)
+- [ ] Phase 4 remaining: Alembic migrations, Gunicorn production config
 - [ ] Phase 5: Advanced analytics, reporting
 
 ## Notes

@@ -1,15 +1,17 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.security import get_current_active_user
 from app.core.tenancy import get_tenant_company_id
 from app.db.connection import get_db
 from app.db.models import QuoteStatus, User
+from app.repositories.company_settings import CompanySettingsRepository
 from app.repositories.quotes import QuoteItemsRepository, QuotesRepository
 from app.schemas.common import PaginatedResponse
 from app.schemas.quote import QuoteCreate, QuoteResponse, QuoteUpdate
+from app.services.pdf_service import generate_quote_pdf
 
 router = APIRouter(prefix="/quotes", tags=["Quotes"])
 
@@ -119,3 +121,57 @@ def update_quote(
     repo.update_quote(quote, **update_data)
     db.commit()
     return repo.get_full_by_id_and_company(quote_id, company_id)
+
+
+@router.post("/{quote_id}/generate-pdf", response_model=QuoteResponse)
+def generate_pdf(
+    quote_id: int,
+    company_id: int = Depends(get_tenant_company_id),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    repo = QuotesRepository(db)
+    quote = repo.get_full_by_id_and_company(quote_id, company_id)
+    if not quote:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Orçamento não encontrado.")
+
+    pdf_endpoint = f"/api/v1/quotes/{quote_id}/pdf"
+    repo.update_quote(quote, pdf_url=pdf_endpoint)
+    db.commit()
+    return repo.get_full_by_id_and_company(quote_id, company_id)
+
+
+@router.get("/{quote_id}/pdf")
+def download_pdf(
+    quote_id: int,
+    company_id: int = Depends(get_tenant_company_id),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    repo = QuotesRepository(db)
+    settings_repo = CompanySettingsRepository(db)
+
+    quote = repo.get_full_by_id_and_company(quote_id, company_id)
+    if not quote:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Orçamento não encontrado.")
+
+    settings = settings_repo.get_by_company_id(company_id)
+    company_name = quote.company.name if getattr(quote, "company", None) else "Empresa"
+    brand_name = settings.brand_name if settings else None
+    quote_prefix = (settings.quote_prefix or "ORC") if settings else "ORC"
+
+    pdf_bytes = generate_quote_pdf(
+        quote=quote,
+        company_name=company_name,
+        brand_name=brand_name,
+        quote_prefix=quote_prefix,
+    )
+
+    code = quote.code or f"{quote_prefix}-{quote_id:04d}"
+    filename = f"orcamento-{code}.pdf"
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )

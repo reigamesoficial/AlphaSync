@@ -83,6 +83,13 @@ class QuoteUpdate(BaseSchema):
     domain_data: dict[str, Any] | None = None
 
 
+class ClientSummary(BaseSchema):
+    id: int
+    name: str
+    phone: str | None = None
+
+
 class QuoteResponse(QuoteBase, IDSchema, TimestampSchema):
     company_id: int
     items: list[QuoteItemResponse] = Field(default_factory=list)
+    client: ClientSummary | None = None

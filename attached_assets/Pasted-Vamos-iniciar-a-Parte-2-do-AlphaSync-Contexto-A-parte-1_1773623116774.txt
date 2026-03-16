@@ -1,0 +1,107 @@
+Vamos iniciar a Parte 2 do AlphaSync.
+
+Contexto:
+A parte 1 já está concluída:
+
+* plantas integradas ao bot
+* medidas funcionando
+* agenda da empresa pronta
+* painel do instalador pronto
+* fluxo protection_network estabilizado
+
+Agora quero fechar o ciclo operacional do orçamento.
+
+Objetivo da Parte 2:
+implementar geração de PDF do orçamento, salvar pdf_url, melhorar a tela de orçamentos e ligar orçamento ao agendamento.
+
+==================================================
+ETAPA 1 — PDF DO ORÇAMENTO
+==========================
+
+Implementar geração de PDF a partir do quote.
+
+O PDF deve incluir:
+
+* nome da empresa
+* logo (se existir)
+* código do orçamento
+* nome do cliente
+* endereço
+* planta (se houver)
+* lista de itens/áreas
+* cor
+* malha
+* subtotal
+* taxa de visita
+* desconto
+* total
+* observações
+* data de emissão
+
+Usar os dados já existentes do quote e quote_items.
+
+==================================================
+ETAPA 2 — BACKEND
+=================
+
+Criar/ajustar endpoints:
+
+* POST /api/v1/quotes/{id}/generate-pdf
+* GET /api/v1/quotes/{id}/pdf
+* opcionalmente POST /api/v1/quotes/{id}/regenerate-pdf
+
+Regras:
+
+* sempre respeitar company_id
+* salvar pdf_url no quote
+* garantir que nenhuma empresa acesse PDF de outra
+
+==================================================
+ETAPA 3 — FRONTEND
+==================
+
+Melhorar a tela de orçamentos com:
+
+* botão Gerar PDF
+* botão Ver PDF
+* botão Baixar PDF
+* card/resumo bonito do orçamento
+* status visual
+* código do orçamento destacado
+
+==================================================
+ETAPA 4 — INTEGRAÇÃO COM A AGENDA
+=================================
+
+Permitir converter orçamento em agendamento.
+
+Opções:
+
+* botão "Agendar serviço"
+* preencher agendamento já com:
+
+  * cliente
+  * endereço
+  * quote_id
+  * service_type
+  * observações relevantes
+
+==================================================
+ETAPA 5 — ENTREGA
+=================
+
+Quero que você trabalhe em etapas:
+
+1. primeiro analise o que já existe para quotes e PDF
+2. implemente backend
+3. implemente frontend
+4. valide geração real de PDF
+5. valide persistência de pdf_url
+6. valide integração com agenda
+
+Importante:
+
+* não refatorar o projeto inteiro
+* preservar arquitetura atual
+* preservar multiempresa
+* mostrar quais arquivos foram alterados

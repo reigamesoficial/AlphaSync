@@ -87,6 +87,12 @@ export interface QuoteItem {
   updated_at: string
 }
 
+export interface QuoteClient {
+  id: number
+  name: string
+  phone: string | null
+}
+
 export interface Quote {
   id: number
   company_id: number
@@ -105,6 +111,7 @@ export interface Quote {
   notes: string | null
   pdf_url: string | null
   items: QuoteItem[]
+  client: QuoteClient | null
   created_at: string
   updated_at: string
 }

@@ -23,3 +23,20 @@ export async function updateQuote(id: number, payload: Partial<Quote>): Promise<
   const { data } = await api.patch<Quote>(`/quotes/${id}`, payload)
   return data
 }
+
+export async function generatePdf(id: number): Promise<Quote> {
+  const { data } = await api.post<Quote>(`/quotes/${id}/generate-pdf`)
+  return data
+}
+
+export async function downloadQuotePdf(id: number, filename: string): Promise<void> {
+  const response = await api.get(`/quotes/${id}/pdf`, { responseType: 'blob' })
+  const url = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
