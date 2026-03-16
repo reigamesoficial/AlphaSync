@@ -1,0 +1,143 @@
+A Parte 3 avançou bem, mas o painel master ainda está incompleto.
+
+Quero completar duas áreas essenciais do MASTER_ADMIN:
+
+1. Configurações SaaS
+2. Gestão de usuários com criação e edição de funções
+
+Importante:
+
+* não refatorar o projeto inteiro
+* preservar a arquitetura atual
+* manter a separação entre painel master e painel operacional
+* fazer em etapas pequenas
+* mostrar arquivos alterados e endpoints criados
+
+==================================================
+ETAPA 1 — CONFIGURAÇÕES SAAS DO MASTER
+======================================
+
+Criar a área /admin/settings no backend e frontend.
+
+Objetivo:
+permitir ao MASTER_ADMIN visualizar e editar configurações globais da plataforma SaaS.
+
+Se ainda não existir estrutura persistente adequada, criar uma forma simples e escalável de armazenar configurações globais da plataforma.
+
+Campos iniciais sugeridos:
+
+* platform_name
+* default_company_plan
+* default_service_domain
+* allow_self_signup
+* support_email
+* support_phone
+* public_app_url
+* branding/logo global (se aplicável)
+* flags globais futuras
+
+Criar endpoints:
+
+* GET /api/v1/admin/settings
+* PATCH /api/v1/admin/settings
+
+Esses endpoints devem ser exclusivos de MASTER_ADMIN.
+
+No frontend:
+
+* criar página /admin/settings
+* layout moderno, clean, estilo SaaS admin
+* formulário funcional com salvar
+* feedback visual de sucesso/erro
+
+==================================================
+ETAPA 2 — GESTÃO DE USUÁRIOS NO PAINEL MASTER
+=============================================
+
+Hoje a área de usuários do master precisa deixar de ser só listagem.
+
+Quero implementar:
+
+* listar usuários
+* buscar usuários
+* filtrar por empresa
+* filtrar por role
+* criar usuário
+* editar usuário
+* alterar role
+* ativar/desativar usuário
+
+Regras:
+
+* MASTER_ADMIN pode criar/editar:
+
+  * master_admin
+  * company_admin
+  * seller
+  * installer
+* company_id pode ser null apenas para master_admin
+* roles da empresa devem sempre pertencer a uma empresa
+* validar coerência entre role e company_id
+
+Criar/ajustar endpoints:
+
+* GET /api/v1/admin/users
+* GET /api/v1/admin/users/{id}
+* POST /api/v1/admin/users
+* PATCH /api/v1/admin/users/{id}
+
+Campos esperados:
+
+* name
+* email
+* role
+* company_id
+* is_active
+* opcionalmente senha inicial no create
+
+No frontend:
+
+* melhorar página /admin/users
+* tabela com filtros
+* modal ou drawer para criação
+* modal ou drawer para edição
+* trocar role
+* ativar/desativar
+* mostrar empresa vinculada
+* UX moderna e consistente com o painel master
+
+==================================================
+ETAPA 3 — VALIDAÇÕES
+====================
+
+Garantir:
+
+* MASTER_ADMIN acessa tudo em /admin/*
+* COMPANY_ADMIN não acessa /admin/*
+* SELLER não acessa /admin/*
+* INSTALLER não acessa /admin/*
+* nenhuma edição de usuário atravessa empresas de forma indevida
+* multiempresa preservado
+
+==================================================
+ETAPA 4 — ENTREGA
+=================
+
+Quero que você faça em etapas:
+
+1. analisar o que já existe para admin settings e admin users
+2. implementar backend
+3. implementar frontend
+4. validar funcionalmente
+5. mostrar:
+
+   * arquivos alterados
+   * endpoints criados
+   * rotas frontend criadas
+   * comportamentos de permissão validados
+
+Importante:
+
+* preservar o que já está pronto
+* não mexer no painel operacional
+* focar apenas no painel master

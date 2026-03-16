@@ -1,6 +1,10 @@
 import api from './client'
 import type { PaginatedResponse } from '../types'
 
+// ============================================================
+// COMPANIES
+// ============================================================
+
 export interface CompanyListItem {
   id: number
   slug: string
@@ -105,6 +109,106 @@ export async function bootstrapAdmin(id: number, payload: BootstrapAdminPayload)
   const { data } = await api.post<CompanyDetail>(`/admin/companies/${id}/bootstrap-admin`, payload)
   return data
 }
+
+// ============================================================
+// USERS
+// ============================================================
+
+export interface AdminUser {
+  id: number
+  name: string
+  email: string
+  role: string
+  company_id: number | null
+  company_name: string | null
+  company_slug: string | null
+  whatsapp_id: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ListUsersParams {
+  page?: number
+  per_page?: number
+  search?: string
+  role?: string
+  company_id?: number
+  is_active?: boolean
+}
+
+export interface CreateUserPayload {
+  name: string
+  email: string
+  password: string
+  role: string
+  company_id: number | null
+  is_active?: boolean
+}
+
+export interface UpdateUserPayload {
+  name?: string
+  email?: string
+  role?: string
+  company_id?: number | null
+  is_active?: boolean
+  password?: string
+}
+
+export async function listUsers(params: ListUsersParams = {}): Promise<PaginatedResponse<AdminUser>> {
+  const { data } = await api.get<PaginatedResponse<AdminUser>>('/admin/users', { params })
+  return data
+}
+
+export async function getUser(id: number): Promise<AdminUser> {
+  const { data } = await api.get<AdminUser>(`/admin/users/${id}`)
+  return data
+}
+
+export async function createUser(payload: CreateUserPayload): Promise<AdminUser> {
+  const { data } = await api.post<AdminUser>('/admin/users', payload)
+  return data
+}
+
+export async function updateUser(id: number, payload: UpdateUserPayload): Promise<AdminUser> {
+  const { data } = await api.patch<AdminUser>(`/admin/users/${id}`, payload)
+  return data
+}
+
+// ============================================================
+// PLATFORM SETTINGS
+// ============================================================
+
+export interface PlatformSettings {
+  id: number
+  platform_name: string
+  default_company_plan: string | null
+  default_service_domain: string
+  allow_self_signup: boolean
+  support_email: string | null
+  support_phone: string | null
+  public_app_url: string | null
+  logo_url: string | null
+  extra_flags: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export type UpdatePlatformSettingsPayload = Partial<Omit<PlatformSettings, 'id' | 'created_at' | 'updated_at'>>
+
+export async function getPlatformSettings(): Promise<PlatformSettings> {
+  const { data } = await api.get<PlatformSettings>('/admin/settings')
+  return data
+}
+
+export async function updatePlatformSettings(payload: UpdatePlatformSettingsPayload): Promise<PlatformSettings> {
+  const { data } = await api.patch<PlatformSettings>('/admin/settings', payload)
+  return data
+}
+
+// ============================================================
+// METRICS
+// ============================================================
 
 export async function getAdminMetrics(): Promise<Record<string, unknown>> {
   const { data } = await api.get('/admin/metrics')

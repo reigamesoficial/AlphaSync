@@ -923,3 +923,21 @@ class Appointment(TimestampMixin, Base):
         remote_side=[id],
         foreign_keys=[parent_appointment_id],
     )
+
+class PlatformSettings(TimestampMixin, Base):
+    """Singleton table (always id=1) for global SaaS platform configuration."""
+
+    __tablename__ = "platform_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    platform_name: Mapped[str] = mapped_column(String(100), default="AlphaSync", nullable=False)
+    default_company_plan: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    default_service_domain: Mapped[str] = mapped_column(
+        String(50), default="protection_network", nullable=False
+    )
+    allow_self_signup: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    support_email: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    support_phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    public_app_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    logo_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    extra_flags: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)

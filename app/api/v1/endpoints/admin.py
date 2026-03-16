@@ -10,8 +10,8 @@ from app.db.models import (
     Appointment,
     Company,
     CompanySettings,
-    CompanyStatus,
     Conversation,
+    PlatformSettings,
     Quote,
     User,
     UserRole,
@@ -21,6 +21,7 @@ from app.repositories.company_settings import CompanySettingsRepository
 from app.repositories.users import UsersRepository
 from app.schemas.common import PaginatedResponse
 from app.schemas.company import (
+    AdminUserSummary,
     BootstrapAdminPayload,
     CompanyCreateFull,
     CompanyDetailResponse,
@@ -28,13 +29,17 @@ from app.schemas.company import (
     CompanyResponse,
     CompanySettingsResponse,
     CompanyUpdate,
-    AdminUserSummary,
 )
-from app.schemas.users import UserCreate, UserResponse
+from app.schemas.platform_settings import PlatformSettingsResponse, PlatformSettingsUpdate
+from app.schemas.users import AdminUserResponse, AdminUserUpdate, UserCreate, UserResponse
 from app.services.onboarding_service import OnboardingService
 
 router = APIRouter(prefix="/admin", tags=["Admin (Master)"])
 
+
+# ============================================================
+# HELPERS — companies
+# ============================================================
 
 def _count_users(db: Session, company_ids: list[int]) -> dict[int, int]:
     if not company_ids:
@@ -97,8 +102,6 @@ def _build_detail(
     has_admin: bool,
 ) -> CompanyDetailResponse:
     settings_repo = CompanySettingsRepository(db)
-    users_repo = UsersRepository(db)
-
     raw_settings = settings_repo.get_by_company_id(c.id)
     settings_resp = CompanySettingsResponse.model_validate(raw_settings) if raw_settings else None
 
@@ -122,11 +125,73 @@ def _build_detail(
     })
 
 
+# ============================================================
+# HELPERS — users
+# ============================================================
+
+def _fetch_admin_user(db: Session, user_id: int) -> AdminUserResponse:
+    row = db.execute(
+        select(User, Company.name.label("cn"), Company.slug.label("cs"))
+        .outerjoin(Company, User.company_id == Company.id)
+        .where(User.id == user_id)
+    ).first()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado.")
+    u, cn, cs = row
+    return AdminUserResponse.model_validate({
+        **UserResponse.model_validate(u).model_dump(),
+        "company_name": cn,
+        "company_slug": cs,
+    })
+
+
+# ============================================================
+# PLATFORM SETTINGS
+# ============================================================
+
+@router.get("/settings", response_model=PlatformSettingsResponse)
+def get_platform_settings(
+    _: User = Depends(require_master_admin),
+    db: Session = Depends(get_db),
+) -> PlatformSettingsResponse:
+    s = db.scalar(select(PlatformSettings))
+    if not s:
+        s = PlatformSettings(id=1)
+        db.add(s)
+        db.commit()
+        db.refresh(s)
+    return PlatformSettingsResponse.model_validate(s)
+
+
+@router.patch("/settings", response_model=PlatformSettingsResponse)
+def update_platform_settings(
+    payload: PlatformSettingsUpdate,
+    _: User = Depends(require_master_admin),
+    db: Session = Depends(get_db),
+) -> PlatformSettingsResponse:
+    s = db.scalar(select(PlatformSettings))
+    if not s:
+        s = PlatformSettings(id=1)
+        db.add(s)
+        db.flush()
+
+    updates = payload.model_dump(exclude_unset=True)
+    for k, v in updates.items():
+        setattr(s, k, v)
+
+    db.commit()
+    db.refresh(s)
+    return PlatformSettingsResponse.model_validate(s)
+
+
+# ============================================================
+# COMPANIES
+# ============================================================
+
 @router.get("/companies", response_model=PaginatedResponse[CompanyListItem])
 def list_all_companies(
     search: str | None = Query(default=None),
     is_active: bool | None = Query(default=None),
-    service_domain: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     per_page: int = Query(default=20, ge=1, le=100),
     _: User = Depends(require_master_admin),
@@ -271,41 +336,99 @@ def bootstrap_admin(
     return _build_detail(db, c, user_count, has_settings, has_admin)
 
 
-@router.get("/users", response_model=list[UserResponse])
+# ============================================================
+# USERS
+# ============================================================
+
+@router.get("/users", response_model=PaginatedResponse[AdminUserResponse])
 def list_all_users(
     company_id: int | None = Query(default=None),
     role: UserRole | None = Query(default=None),
+    is_active: bool | None = Query(default=None),
     search: str | None = Query(default=None),
-    limit: int = Query(default=50, ge=1, le=200),
-    offset: int = Query(default=0, ge=0),
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=20, ge=1, le=100),
     _: User = Depends(require_master_admin),
     db: Session = Depends(get_db),
-) -> list[UserResponse]:
-    stmt = select(User)
+) -> PaginatedResponse[AdminUserResponse]:
+    base_stmt = (
+        select(User, Company.name.label("cn"), Company.slug.label("cs"))
+        .outerjoin(Company, User.company_id == Company.id)
+    )
+    conditions = []
     if company_id is not None:
-        stmt = stmt.where(User.company_id == company_id)
+        if company_id == 0:
+            conditions.append(User.company_id.is_(None))
+        else:
+            conditions.append(User.company_id == company_id)
     if role is not None:
-        stmt = stmt.where(User.role == role)
+        conditions.append(User.role == role)
+    if is_active is not None:
+        conditions.append(User.is_active == is_active)
     if search:
         term = f"%{search.strip()}%"
-        stmt = stmt.where(or_(User.name.ilike(term), User.email.ilike(term)))
-    stmt = stmt.order_by(User.name.asc()).offset(offset).limit(limit)
-    return list(db.scalars(stmt).all())
+        conditions.append(or_(User.name.ilike(term), User.email.ilike(term)))
+
+    if conditions:
+        base_stmt = base_stmt.where(*conditions)
+
+    total = db.scalar(
+        select(func.count())
+        .select_from(User)
+        .where(*conditions)
+    ) or 0
+
+    rows = db.execute(
+        base_stmt.order_by(User.name.asc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+    ).all()
+
+    items = [
+        AdminUserResponse.model_validate({
+            **UserResponse.model_validate(u).model_dump(),
+            "company_name": cn,
+            "company_slug": cs,
+        })
+        for u, cn, cs in rows
+    ]
+    return PaginatedResponse(items=items, total=total, page=page, per_page=per_page)
 
 
-@router.post("/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.get("/users/{user_id}", response_model=AdminUserResponse)
+def get_user(
+    user_id: int,
+    _: User = Depends(require_master_admin),
+    db: Session = Depends(get_db),
+) -> AdminUserResponse:
+    return _fetch_admin_user(db, user_id)
+
+
+@router.post("/users", response_model=AdminUserResponse, status_code=status.HTTP_201_CREATED)
 def create_user(
     payload: UserCreate,
     _: User = Depends(require_master_admin),
     db: Session = Depends(get_db),
-) -> UserResponse:
-    repo = UsersRepository(db)
-    existing = repo.get_by_email(payload.email)
+) -> AdminUserResponse:
+    users_repo = UsersRepository(db)
+    existing = users_repo.get_by_email(str(payload.email))
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Já existe um usuário com esse e-mail.")
-    obj = repo.create_user(
+
+    if payload.role != UserRole.MASTER_ADMIN and payload.company_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="company_id é obrigatório para roles que não sejam master_admin.",
+        )
+    if payload.role == UserRole.MASTER_ADMIN and payload.company_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="master_admin não pode pertencer a uma empresa.",
+        )
+
+    obj = users_repo.create_user(
         company_id=payload.company_id,
-        email=payload.email,
+        email=str(payload.email),
         password_hash=hash_password(payload.password),
         role=payload.role,
         name=payload.name,
@@ -314,8 +437,55 @@ def create_user(
     )
     db.commit()
     db.refresh(obj)
-    return obj
+    return _fetch_admin_user(db, obj.id)
 
+
+@router.patch("/users/{user_id}", response_model=AdminUserResponse)
+def update_user(
+    user_id: int,
+    payload: AdminUserUpdate,
+    _: User = Depends(require_master_admin),
+    db: Session = Depends(get_db),
+) -> AdminUserResponse:
+    u = db.get(User, user_id)
+    if not u:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado.")
+
+    updates = payload.model_dump(exclude_unset=True)
+
+    if "role" in updates:
+        if updates["role"] == UserRole.MASTER_ADMIN:
+            updates["company_id"] = None
+        elif updates["role"] != UserRole.MASTER_ADMIN and updates.get("company_id") is None and u.company_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="company_id é obrigatório para roles que não sejam master_admin.",
+            )
+
+    if "email" in updates:
+        existing = db.scalar(
+            select(User).where(
+                func.lower(User.email) == str(updates["email"]).lower(),
+                User.id != user_id,
+            )
+        )
+        if existing:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="E-mail já em uso por outro usuário.")
+
+    for k, v in updates.items():
+        if k == "password":
+            u.password_hash = hash_password(v)
+        else:
+            setattr(u, k, v)
+
+    db.commit()
+    db.refresh(u)
+    return _fetch_admin_user(db, u.id)
+
+
+# ============================================================
+# METRICS
+# ============================================================
 
 @router.get("/metrics")
 def get_global_metrics(

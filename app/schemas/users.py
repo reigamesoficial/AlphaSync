@@ -37,3 +37,17 @@ class UserResponse(UserBase, IDSchema, TimestampSchema):
 
 class UserMeResponse(UserResponse):
     pass
+
+
+class AdminUserResponse(UserResponse):
+    company_name: str | None = None
+    company_slug: str | None = None
+
+
+class AdminUserUpdate(BaseSchema):
+    name: str | None = Field(default=None, min_length=2, max_length=200)
+    email: EmailStr | None = None
+    role: UserRole | None = None
+    company_id: int | None = None
+    is_active: bool | None = None
+    password: str | None = Field(default=None, min_length=6, max_length=128)

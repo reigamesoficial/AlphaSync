@@ -132,6 +132,14 @@ Master admin has `company_id = null` in JWT — cannot access tenant endpoints (
   - `app/api/v1/endpoints/admin.py` — rewritten: GET /admin/companies (paginated), GET /admin/companies/{id}, POST /admin/companies (full bootstrap), PATCH /admin/companies/{id}, POST /admin/companies/{id}/bootstrap-admin
   - `frontend/src/api/admin.ts` — new admin API client (listCompanies, getCompany, createCompany, updateCompany, bootstrapAdmin)
   - `frontend/src/pages/admin/AdminCompanies.tsx` — rebuilt: stats cards, paginated table with search, detail drawer (settings/admin status, config info, plan edit, toggle active), create modal (full company + admin form, auto-slug), bootstrap-admin form
+- [x] Phase 4 (Parte 3 SaaS): Platform Settings + Users full CRUD
+  - `app/db/models.py` — added PlatformSettings (singleton, id=1, auto-created on first GET)
+  - `app/schemas/platform_settings.py` — PlatformSettingsBase, PlatformSettingsUpdate, PlatformSettingsResponse
+  - `app/schemas/users.py` — added AdminUserResponse (with company_name/slug), AdminUserUpdate (with company_id)
+  - `app/api/v1/endpoints/admin.py` — added: GET/PATCH /admin/settings, GET /admin/users/{id}, PATCH /admin/users/{id}; enhanced GET /admin/users (paginated, with company_name, role/search/company/is_active filters)
+  - `frontend/src/api/admin.ts` — added: getPlatformSettings, updatePlatformSettings, listUsers, getUser, createUser, updateUser + full TypeScript types
+  - `frontend/src/pages/admin/AdminSettings.tsx` — rebuilt: form with 3 sections (Plataforma, Padrões, Suporte), toggle allow_self_signup, live dirty state, save button
+  - `frontend/src/pages/admin/AdminUsers.tsx` — rebuilt: paginated table with search/role/company filters, right-side edit drawer (name/email/role/company/is_active), password reset, create modal, activate/deactivate action
 - [ ] Phase 4 remaining: Alembic migrations, Gunicorn production config
 - [ ] Phase 5: Advanced analytics, reporting
 
