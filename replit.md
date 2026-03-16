@@ -47,7 +47,7 @@ app/                        - FastAPI backend
 
 frontend/                   - React panel
 ├── src/
-│   ├── api/                - Axios API calls (auth, clients, conversations, quotes, company, dashboard, measures)
+│   ├── api/                - Axios API calls (auth, clients, conversations, quotes, company, dashboard, measures, admin)
 │   ├── components/
 │   │   ├── layout/         - AppLayout, AdminLayout, InstallerLayout, Sidebar, Topbar
 │   │   └── ui/             - Badge, StatCard, EmptyState, Spinner
@@ -126,6 +126,12 @@ Master admin has `company_id = null` in JWT — cannot access tenant endpoints (
 - [x] Phase 3: Schedule.tsx rebuilt (stats, filter tabs, new appointment modal)
 - [x] Phase 3: InstallerSchedule.tsx rebuilt (today/upcoming sections, status actions, expandable cards)
 - [x] Phase 4: PDF generation (reportlab, GET /quotes/{id}/pdf, POST /quotes/{id}/generate-pdf, Quotes.tsx detail drawer with PDF download + status actions)
+- [x] Phase 4 (Parte 3 SaaS): Onboarding service + AdminCompanies rebuild
+  - `app/services/onboarding_service.py` — atomic bootstrap (company + settings + admin) with domain defaults for protection_network
+  - `app/schemas/company.py` — added CompanyCreateFull, CompanyListItem, CompanyDetailResponse, AdminUserSummary, BootstrapAdminPayload
+  - `app/api/v1/endpoints/admin.py` — rewritten: GET /admin/companies (paginated), GET /admin/companies/{id}, POST /admin/companies (full bootstrap), PATCH /admin/companies/{id}, POST /admin/companies/{id}/bootstrap-admin
+  - `frontend/src/api/admin.ts` — new admin API client (listCompanies, getCompany, createCompany, updateCompany, bootstrapAdmin)
+  - `frontend/src/pages/admin/AdminCompanies.tsx` — rebuilt: stats cards, paginated table with search, detail drawer (settings/admin status, config info, plan edit, toggle active), create modal (full company + admin form, auto-slug), bootstrap-admin form
 - [ ] Phase 4 remaining: Alembic migrations, Gunicorn production config
 - [ ] Phase 5: Advanced analytics, reporting
 

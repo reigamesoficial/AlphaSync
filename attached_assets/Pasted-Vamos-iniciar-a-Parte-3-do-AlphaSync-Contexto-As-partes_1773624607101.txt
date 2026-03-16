@@ -1,0 +1,116 @@
+Vamos iniciar a Parte 3 do AlphaSync.
+
+Contexto:
+As partes anteriores já estão prontas:
+
+* chatbot protection_network
+* catálogo de medidas
+* agenda própria
+* painel do instalador
+* PDF de orçamento
+* painel operacional por role
+* painel master inicial
+* isolamento multiempresa validado
+
+Agora quero transformar o AlphaSync em um SaaS realmente operacional para onboarding de novas empresas.
+
+Objetivo da Parte 3:
+permitir que o MASTER_ADMIN consiga criar e ativar novas empresas com bootstrap completo, sem depender de configuração manual no banco.
+
+==================================================
+ETAPA 1 — BACKEND DE ONBOARDING
+===============================
+
+Criar ou ajustar endpoints para MASTER_ADMIN:
+
+* GET /api/v1/admin/companies
+* GET /api/v1/admin/companies/{id}
+* POST /api/v1/admin/companies
+* PATCH /api/v1/admin/companies/{id}
+* POST /api/v1/admin/companies/{id}/bootstrap-admin
+
+Quero que o POST /admin/companies consiga criar:
+
+* company
+* company_settings
+* admin inicial da empresa
+
+Se possível, permitir payload com:
+
+* nome da empresa
+* slug
+* domínio de serviço
+* plano
+* whatsapp_phone_number_id
+* nome do admin inicial
+* email do admin inicial
+* senha inicial
+
+==================================================
+ETAPA 2 — DEFAULTS POR DOMÍNIO
+==============================
+
+Implementar bootstrap automático por domínio.
+
+Para protection_network, criar defaults automáticos em company_settings.extra_settings, incluindo:
+
+* show_measures_to_customer
+* default_price_per_m2
+* minimum_order_value
+* visit_fee
+* mesh_prices
+* available_colors
+* available_mesh_types
+* quote_prefix
+* bot_name
+
+Estruture isso para permitir expansão futura para outros domínios.
+
+==================================================
+ETAPA 3 — PAINEL MASTER
+=======================
+
+Melhorar o painel master para permitir:
+
+* listar empresas
+* buscar empresa
+* criar empresa
+* editar status/plano/domínio
+* visualizar dados principais
+* criar admin inicial se não existir
+* ver status de configuração da empresa
+
+Quero uma UX moderna e limpa, estilo SaaS admin.
+
+==================================================
+ETAPA 4 — FLUXO DE CRIAÇÃO DE EMPRESA
+=====================================
+
+Ao criar uma empresa, o sistema deve deixar a empresa pronta para uso:
+
+* settings criadas
+* admin criado
+* defaults carregados
+* login possível no painel da empresa
+
+Se algum item falhar, retornar erro claro.
+
+==================================================
+ETAPA 5 — ENTREGA
+=================
+
+Quero que você faça em etapas:
+
+1. analisar o que já existe no painel master
+2. implementar backend de criação/edição de empresas
+3. implementar defaults por domínio
+4. melhorar frontend do painel master
+5. validar criação real de uma empresa nova
+6. validar login do admin da empresa criada
+
+Importante:
+
+* não refatorar o projeto inteiro
+* preservar multiempresa
+* preservar guards e roles já implementados
+* mostrar arquivos alterados e endpoints criados

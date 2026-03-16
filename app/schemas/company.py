@@ -2,7 +2,7 @@ from typing import Any
 
 from pydantic import EmailStr, Field
 
-from app.db.models import CompanyStatus, ServiceDomain
+from app.db.models import CompanyStatus, ServiceDomain, UserRole
 from app.schemas.common import BaseSchema, IDSchema, TimestampSchema
 
 
@@ -88,3 +88,40 @@ class CompanySettingsUpdate(BaseSchema):
 
 class CompanySettingsResponse(CompanySettingsBase, IDSchema, TimestampSchema):
     company_id: int
+
+
+class CompanyCreateFull(BaseSchema):
+    name: str = Field(min_length=2, max_length=200)
+    slug: str = Field(min_length=2, max_length=60)
+    service_domain: ServiceDomain = ServiceDomain.PROTECTION_NETWORK
+    plan_name: str | None = Field(default=None, max_length=50)
+    whatsapp_phone_number_id: str | None = Field(default=None, max_length=40)
+    support_email: EmailStr | None = None
+    admin_name: str = Field(min_length=2, max_length=200)
+    admin_email: EmailStr
+    admin_password: str = Field(min_length=6)
+
+
+class BootstrapAdminPayload(BaseSchema):
+    admin_name: str = Field(min_length=2, max_length=200)
+    admin_email: EmailStr
+    admin_password: str = Field(min_length=6)
+
+
+class AdminUserSummary(BaseSchema):
+    id: int
+    name: str
+    email: str
+    role: UserRole
+    is_active: bool
+
+
+class CompanyListItem(CompanyBase, IDSchema, TimestampSchema):
+    user_count: int = 0
+    has_settings: bool = False
+    has_admin: bool = False
+
+
+class CompanyDetailResponse(CompanyListItem):
+    settings: CompanySettingsResponse | None = None
+    admin_users: list[AdminUserSummary] = Field(default_factory=list)
