@@ -69,6 +69,32 @@ class AppointmentsRepository(TenantRepository[Appointment]):
         stmt = stmt.order_by(Appointment.start_at.asc()).offset(offset).limit(limit)
         return list(self.db.scalars(stmt).all())
 
+    def has_installer_conflict(
+        self,
+        company_id: int,
+        installer_id: int,
+        start_at: datetime,
+        end_at: datetime,
+        exclude_appointment_id: int | None = None,
+    ) -> bool:
+        """Return True if the installer has an overlapping active appointment in the given window."""
+        active_statuses = [
+            AppointmentStatus.SCHEDULED,
+            AppointmentStatus.CONFIRMED,
+            AppointmentStatus.IN_PROGRESS,
+            AppointmentStatus.RESCHEDULED,
+        ]
+        stmt = select(Appointment).where(
+            Appointment.company_id == company_id,
+            Appointment.assigned_installer_id == installer_id,
+            Appointment.status.in_(active_statuses),
+            Appointment.start_at < end_at,
+            Appointment.end_at > start_at,
+        )
+        if exclude_appointment_id is not None:
+            stmt = stmt.where(Appointment.id != exclude_appointment_id)
+        return self.db.scalar(stmt) is not None
+
     def list_due_reminders(
         self,
         company_id: int,

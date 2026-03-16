@@ -15,12 +15,34 @@ from app.core.security import (
 )
 from app.core.tenancy import get_tenant_company_id
 from app.db.connection import get_db
-from app.db.models import User, UserRole
+from app.db.models import CompanySettings, DomainDefinition, User, UserRole
 from app.schemas.company import CompanySettingsResponse, CompanySettingsUpdate
 from app.schemas.measures import PNSettingsResponse, PNSettingsUpdate
 from app.schemas.users import UserResponse
 from app.services.settings_service import SettingsService
 from pydantic import BaseModel, EmailStr, Field
+
+BUILTIN_DOMAIN_KEYS = [
+    "protection_network",
+    "hvac",
+    "electrician",
+    "plumbing",
+    "cleaning",
+    "glass_installation",
+    "pest_control",
+    "security_cameras",
+]
+
+DOMAIN_DISPLAY_NAMES: dict[str, str] = {
+    "protection_network": "Redes de Proteção",
+    "hvac": "Ar Condicionado",
+    "electrician": "Eletricista",
+    "plumbing": "Encanamento",
+    "cleaning": "Limpeza",
+    "glass_installation": "Vidraçaria",
+    "pest_control": "Dedetização",
+    "security_cameras": "Câmeras de Segurança",
+}
 
 router = APIRouter(prefix="/company", tags=["Company"])
 
@@ -291,3 +313,223 @@ def update_company_user(
     db.commit()
     db.refresh(u)
     return u
+
+
+# ── installer schedule endpoints ────────────────────────────────────────────
+
+
+class InstallerScheduleConfig(BaseModel):
+    allowed_weekdays: list[int] = Field(default=[0, 1, 2, 3, 4], description="0=Seg, 6=Dom")
+    work_start: str = Field(default="08:00", description="HH:MM")
+    work_end: str = Field(default="18:00", description="HH:MM")
+
+
+class InstallerWithSchedule(BaseModel):
+    id: int
+    name: str
+    email: str
+    is_active: bool
+    schedule: InstallerScheduleConfig
+
+    model_config = {"from_attributes": True}
+
+
+def _get_company_settings_obj(db: Session, company_id: int) -> CompanySettings:
+    cs = db.scalar(select(CompanySettings).where(CompanySettings.company_id == company_id))
+    if not cs:
+        cs = CompanySettings(company_id=company_id, extra_settings={})
+        db.add(cs)
+        db.flush()
+    return cs
+
+
+@router.get("/installers", response_model=list[InstallerWithSchedule])
+def list_installers(
+    current_user: User = Depends(_require_company_only),
+    tenant_company_id: int = Depends(get_tenant_company_id),
+    db: Session = Depends(get_db),
+) -> list[InstallerWithSchedule]:
+    users = db.scalars(
+        select(User)
+        .where(User.company_id == tenant_company_id, User.role == UserRole.INSTALLER)
+        .order_by(User.name)
+    ).all()
+
+    cs = db.scalar(select(CompanySettings).where(CompanySettings.company_id == tenant_company_id))
+    extra = (cs.extra_settings or {}) if cs else {}
+    installer_schedules = extra.get("installer_schedules") or {}
+
+    result = []
+    for u in users:
+        saved = installer_schedules.get(str(u.id)) or {}
+        schedule = InstallerScheduleConfig(
+            allowed_weekdays=saved.get("allowed_weekdays", [0, 1, 2, 3, 4]),
+            work_start=saved.get("work_start", "08:00"),
+            work_end=saved.get("work_end", "18:00"),
+        )
+        result.append(InstallerWithSchedule(
+            id=u.id,
+            name=u.name,
+            email=u.email,
+            is_active=u.is_active,
+            schedule=schedule,
+        ))
+    return result
+
+
+@router.patch("/installers/{user_id}/schedule", response_model=InstallerWithSchedule)
+def update_installer_schedule(
+    user_id: int,
+    payload: InstallerScheduleConfig,
+    current_user: User = Depends(_require_company_only),
+    tenant_company_id: int = Depends(get_tenant_company_id),
+    db: Session = Depends(get_db),
+) -> InstallerWithSchedule:
+    u = db.get(User, user_id)
+    if not u or u.company_id != tenant_company_id or u.role != UserRole.INSTALLER:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instalador não encontrado.")
+
+    cs = _get_company_settings_obj(db, tenant_company_id)
+    extra = dict(cs.extra_settings or {})
+    schedules = dict(extra.get("installer_schedules") or {})
+    schedules[str(user_id)] = payload.model_dump()
+    extra["installer_schedules"] = schedules
+    cs.extra_settings = extra
+    db.commit()
+
+    return InstallerWithSchedule(
+        id=u.id,
+        name=u.name,
+        email=u.email,
+        is_active=u.is_active,
+        schedule=payload,
+    )
+
+
+# ── flow config (bot messages) endpoints ────────────────────────────────────
+
+
+class DomainBotMessages(BaseModel):
+    greeting: str = ""
+    fallback: str = ""
+    tone: str = "amigável"
+
+
+class DomainFlowConfig(BaseModel):
+    key: str
+    display_name: str
+    messages: DomainBotMessages
+    is_customized: bool
+
+
+class FlowConfigPatch(BaseModel):
+    key: str
+    messages: DomainBotMessages
+
+
+@router.get("/flow-config", response_model=list[DomainFlowConfig])
+def get_flow_config(
+    current_user: User = Depends(_require_company_only),
+    tenant_company_id: int = Depends(get_tenant_company_id),
+    db: Session = Depends(get_db),
+) -> list[DomainFlowConfig]:
+    cs = db.scalar(select(CompanySettings).where(CompanySettings.company_id == tenant_company_id))
+    extra = (cs.extra_settings or {}) if cs else {}
+
+    result = []
+    for key in BUILTIN_DOMAIN_KEYS:
+        domain_obj = db.scalar(select(DomainDefinition).where(DomainDefinition.key == key))
+        domain_defaults = (domain_obj.config_json or {}) if domain_obj else {}
+
+        default_greeting = domain_defaults.get("greeting_message", "")
+        default_fallback = domain_defaults.get("fallback_message", "")
+        default_tone = domain_defaults.get("tone", "amigável")
+
+        company_override = extra.get(key) or {}
+        bot_messages = company_override.get("bot_messages") or {}
+
+        greeting = bot_messages.get("greeting", "")
+        fallback = bot_messages.get("fallback", "")
+        tone = bot_messages.get("tone", "")
+
+        is_customized = bool(bot_messages)
+
+        result.append(DomainFlowConfig(
+            key=key,
+            display_name=DOMAIN_DISPLAY_NAMES.get(key, key),
+            messages=DomainBotMessages(
+                greeting=greeting or default_greeting,
+                fallback=fallback or default_fallback,
+                tone=tone or default_tone,
+            ),
+            is_customized=is_customized,
+        ))
+    return result
+
+
+@router.patch("/flow-config", response_model=DomainFlowConfig)
+def update_flow_config(
+    payload: FlowConfigPatch,
+    current_user: User = Depends(_require_company_only),
+    tenant_company_id: int = Depends(get_tenant_company_id),
+    db: Session = Depends(get_db),
+) -> DomainFlowConfig:
+    if payload.key not in BUILTIN_DOMAIN_KEYS:
+        raise HTTPException(status_code=400, detail=f"Domínio '{payload.key}' inválido.")
+
+    cs = _get_company_settings_obj(db, tenant_company_id)
+    extra = dict(cs.extra_settings or {})
+    domain_section = dict(extra.get(payload.key) or {})
+    domain_section["bot_messages"] = payload.messages.model_dump()
+    extra[payload.key] = domain_section
+    cs.extra_settings = extra
+    db.commit()
+
+    return DomainFlowConfig(
+        key=payload.key,
+        display_name=DOMAIN_DISPLAY_NAMES.get(payload.key, payload.key),
+        messages=payload.messages,
+        is_customized=True,
+    )
+
+
+# ── global schedule config ───────────────────────────────────────────────────
+
+
+class ScheduleConfig(BaseModel):
+    slot_minutes: int = Field(default=120, ge=30, le=480)
+    workday_start: str = Field(default="08:00")
+    workday_end: str = Field(default="18:00")
+    allowed_weekdays: list[int] = Field(default=[0, 1, 2, 3, 4])
+
+
+@router.get("/schedule-config", response_model=ScheduleConfig)
+def get_schedule_config(
+    current_user: User = Depends(_require_company_only),
+    tenant_company_id: int = Depends(get_tenant_company_id),
+    db: Session = Depends(get_db),
+) -> ScheduleConfig:
+    cs = db.scalar(select(CompanySettings).where(CompanySettings.company_id == tenant_company_id))
+    extra = (cs.extra_settings or {}) if cs else {}
+    cfg = extra.get("schedule") or {}
+    return ScheduleConfig(
+        slot_minutes=int(cfg.get("slot_minutes", 120)),
+        workday_start=cfg.get("workday_start", "08:00"),
+        workday_end=cfg.get("workday_end", "18:00"),
+        allowed_weekdays=list(cfg.get("allowed_weekdays", [0, 1, 2, 3, 4])),
+    )
+
+
+@router.patch("/schedule-config", response_model=ScheduleConfig)
+def update_schedule_config(
+    payload: ScheduleConfig,
+    current_user: User = Depends(_require_company_only),
+    tenant_company_id: int = Depends(get_tenant_company_id),
+    db: Session = Depends(get_db),
+) -> ScheduleConfig:
+    cs = _get_company_settings_obj(db, tenant_company_id)
+    extra = dict(cs.extra_settings or {})
+    extra["schedule"] = payload.model_dump()
+    cs.extra_settings = extra
+    db.commit()
+    return payload

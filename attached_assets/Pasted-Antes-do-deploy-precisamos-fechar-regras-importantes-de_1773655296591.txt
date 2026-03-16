@@ -1,0 +1,212 @@
+Antes do deploy, precisamos fechar regras importantes de operação no AlphaSync.
+
+Objetivo:
+ajustar agenda e permitir configuração de mensagens do fluxo do domínio no painel da empresa.
+
+Importante:
+
+* não refatorar o projeto inteiro
+* preservar a arquitetura atual
+* preservar multiempresa
+* fazer em etapas pequenas
+* mostrar arquivos alterados e endpoints criados
+
+==================================================
+PARTE 1 — AGENDA OPERACIONAL
+============================
+
+Precisamos melhorar a agenda da empresa e do instalador.
+
+Regras obrigatórias:
+
+1. Impedir datas passadas
+
+* no frontend, o usuário não pode selecionar visualmente dias/horários já passados
+* no backend, também deve bloquear criação/edição de agendamento em data/hora passada
+
+2. Impedir conflito de instalador
+
+* um instalador não pode ter dois agendamentos no mesmo horário
+* validar isso no backend
+* mostrar erro amigável no frontend
+
+3. Blocos de horário por domínio
+   Para o domínio protection_network:
+
+* os horários devem ser organizados em blocos de 2 em 2 horas
+* exemplo: 08:00, 10:00, 12:00, 14:00, 16:00
+* o usuário não deve conseguir escolher horários fora da grade configurada
+
+4. Configurabilidade
+   Esses blocos precisam ser configuráveis.
+   Sugestão:
+   company_settings.extra_settings.schedule
+   ou extra_settings.protection_network.schedule
+
+Exemplo:
+{
+"slot_minutes": 120,
+"workday_start": "08:00",
+"workday_end": "18:00",
+"allowed_weekdays": [1,2,3,4,5]
+}
+
+5. Dias de trabalho do instalador
+   O admin da empresa precisa conseguir definir pelo painel:
+
+* quais dias da semana cada instalador trabalha
+* opcionalmente horário inicial/final por instalador
+
+Exemplo por instalador:
+
+* segunda a sexta
+* sábado opcional
+* domingo não trabalha
+
+Se possível, persistir isso em campo próprio do usuário instalador ou configuração relacionada.
+
+6. Painel do instalador
+   O instalador deve continuar vendo apenas a agenda dele.
+   Se não trabalhar em determinado dia, não deve aparecer como disponível para novos agendamentos.
+
+==================================================
+PARTE 2 — PAINEL DA EMPRESA: CONFIGURAR MENSAGENS DO FLUXO
+==========================================================
+
+Hoje o painel master já permite editar configurações de domínio.
+Agora precisamos permitir que o painel da empresa também consiga configurar as mensagens do fluxo do domínio da própria empresa.
+
+Regra de produto:
+
+* MASTER_ADMIN define defaults globais do domínio
+* COMPANY_ADMIN pode sobrescrever essas mensagens para a própria empresa
+* isso vale apenas para a empresa dele
+* nunca altera o domínio global
+
+Precisamos permitir no painel da empresa editar:
+
+* mensagem inicial
+* mensagem de confirmação
+* mensagem de fallback
+* tom do assistente
+* mensagens de ajuda do fluxo
+* opcionalmente labels configuráveis
+
+Essas configurações devem ser salvas em:
+company_settings.extra_settings
+no escopo do domínio da empresa
+
+Exemplo:
+{
+"protection_network": {
+"bot_messages": {
+"greeting": "...",
+"confirmation": "...",
+"fallback": "..."
+},
+"assistant_tone": "amigável"
+}
+}
+
+Comportamento esperado:
+
+* o bot deve usar primeiro as configurações da empresa
+* se não existirem, usar os defaults do DomainDefinition do master
+
+==================================================
+PARTE 3 — FRONTEND
+==================
+
+1. Agenda da empresa
+   Melhorar a UX da tela de agenda:
+
+* desabilitar datas passadas
+* desabilitar horários inválidos
+* mostrar horários disponíveis em blocos
+* mostrar claramente conflito de instalador
+* respeitar dias de trabalho do instalador
+
+2. Tela de instaladores ou configurações operacionais
+   Adicionar interface para configurar:
+
+* dias de trabalho
+* horário inicial/final do instalador
+* disponibilidade operacional
+
+3. Configurações do fluxo no painel da empresa
+   Adicionar uma área no painel da empresa, dentro de Configurações do domínio:
+
+* mensagens do fluxo
+* tom do assistente
+* fallback
+* ajuda do fluxo
+
+Visual:
+
+* bonito
+* consistente com o restante do painel
+* sem depender de JSON cru como experiência principal
+
+==================================================
+PARTE 4 — BACKEND
+=================
+
+Criar/ajustar endpoints necessários para:
+
+1. Agenda
+
+* validar conflitos
+* validar datas passadas
+* gerar slots disponíveis conforme domínio
+* respeitar disponibilidade do instalador
+
+2. Instaladores
+
+* editar disponibilidade/dias de trabalho
+
+3. Company settings do domínio
+
+* ler e salvar mensagens do fluxo da empresa
+
+==================================================
+PARTE 5 — ENTREGA
+=================
+
+Quero que você faça em etapas:
+
+ETAPA 1
+
+* analisar como a agenda está hoje
+* propor onde salvar disponibilidade do instalador
+* propor onde salvar configurações de mensagens por empresa
+
+ETAPA 2
+
+* implementar validações de agenda
+* bloquear datas passadas
+* bloquear conflito de instalador
+* implementar blocos de 2h para protection_network
+
+ETAPA 3
+
+* implementar disponibilidade do instalador
+* permitir edição pelo painel da empresa
+
+ETAPA 4
+
+* implementar configuração de mensagens do fluxo no painel da empresa
+* garantir fallback para os defaults do domínio master
+
+ETAPA 5
+
+* validar tudo funcionalmente
+* mostrar arquivos alterados
+* mostrar endpoints criados/alterados
+* explicar como cada regra foi garantida
+
+Importante:
+
+* preservar o que já funciona
+* não quebrar roles
+* não quebrar multiempresa
+* não misturar master config com company config
