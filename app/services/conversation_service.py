@@ -364,6 +364,57 @@ class ConversationService:
             last_interaction_at=utc_now(),
         )
 
+    def _maybe_humanize_response(
+        self,
+        *,
+        company: Company,
+        conversation: Conversation,
+        domain_result: dict[str, Any],
+    ) -> dict[str, Any]:
+        """
+        Humaniza o texto do bot usando IA se estiver habilitado para esta empresa.
+        Retorna o domain_result original se a IA estiver desabilitada ou falhar.
+        """
+        try:
+            settings_obj = getattr(company, "settings", None)
+            extra = (settings_obj.extra_settings or {}) if settings_obj else {}
+            if not extra.get("ai_humanize_enabled", False):
+                return domain_result
+
+            from app.services.ai_assistant_service import humanize_bot_response
+
+            bot_name = settings_obj.bot_name if settings_obj else None
+            company_ctx = {
+                "company_name": company.name,
+                "bot_name": bot_name or "Assistente",
+                "service_domain": str(
+                    company.service_domain.value
+                    if hasattr(company.service_domain, "value")
+                    else company.service_domain
+                ),
+                "tone": str(extra.get("ai_tone", "amigável e profissional")),
+            }
+
+            current_step = conversation.bot_step or ""
+            original_text = domain_result.get("text") or ""
+            humanized = humanize_bot_response(
+                original_text,
+                company_ctx=company_ctx,
+                current_step=current_step,
+            )
+
+            if humanized and humanized != original_text:
+                result = dict(domain_result)
+                result["text"] = humanized
+                result["_ai_humanized"] = True
+                return result
+
+        except Exception as exc:
+            import logging
+            logging.getLogger("alphasync.ai").warning("Humanize step failed: %s", exc)
+
+        return domain_result
+
     def _execute_domain_flow(
         self,
         *,
@@ -733,6 +784,14 @@ class ConversationService:
             )
             if quote:
                 persisted_quote_id = quote.id
+
+        # ── Humanização via IA (opcional, degradação graciosa) ─────────────────
+        if domain_result and domain_result.get("text"):
+            domain_result = self._maybe_humanize_response(
+                company=company,
+                conversation=conversation,
+                domain_result=domain_result,
+            )
 
         outbound_result = self._send_domain_response(
             company=company,

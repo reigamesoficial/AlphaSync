@@ -159,12 +159,18 @@ def download_pdf(
     company_name = quote.company.name if getattr(quote, "company", None) else "Empresa"
     brand_name = settings.brand_name if settings else None
     quote_prefix = (settings.quote_prefix or "ORC") if settings else "ORC"
+    logo_url = settings.logo_url if settings else None
+
+    extra = (settings.extra_settings or {}) if settings else {}
+    show_measures = bool(extra.get("show_measures_to_customer", True))
 
     pdf_bytes = generate_quote_pdf(
         quote=quote,
         company_name=company_name,
         brand_name=brand_name,
         quote_prefix=quote_prefix,
+        logo_url=logo_url,
+        show_measures=show_measures,
     )
 
     code = quote.code or f"{quote_prefix}-{quote_id:04d}"

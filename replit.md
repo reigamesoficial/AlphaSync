@@ -158,7 +158,33 @@ Master admin has `company_id = null` in JWT — cannot access tenant endpoints (
   - **docker-compose.yml**: 6 serviços (postgres, redis, backend, frontend, nginx, migrations); healthchecks em todos; profiles para migrations; volumes nomeados
   - **nginx/nginx.conf**: reverse proxy com rate limiting (api: 60r/m, auth: 10r/m), headers de segurança, SSL comentado pronto para ativar
   - **DEPLOY.md**: guia completo de deploy em VPS (setup, first deploy, SSL, backups, atualizações, checklist de 15 itens)
-- [ ] Phase 5: Advanced analytics, reporting
+- [x] Phase 5 (Parte 5 — produto): PDF, conversas, IA, janela 24h WhatsApp
+  - **PDF melhorado** (`app/services/pdf_service.py`):
+    - Parâmetro `logo_url`: baixa logo via requests + PIL, renderiza no cabeçalho com aspect ratio correto; degrada sem logo sem erro visual
+    - Parâmetro `show_measures: bool`: quando False, oculta colunas Dimensões e Área da tabela, mostra rodapé informativo; quando True mantém tabela completa
+    - `quotes.py` endpoint `GET /quotes/{id}/pdf` passa automaticamente `logo_url` e `show_measures_to_customer` das company settings
+  - **Painel de conversas — preview de arquivos** (`frontend/src/pages/Conversations.tsx`):
+    - Drawer lateral ao clicar em qualquer conversa
+    - Renderização de mensagens com direção (in/out), avatar, horário, agrupamento por dia
+    - Preview inline de: imagens (`<img>`), vídeos (`<video controls>`), áudio (`<audio controls>`), PDFs (iframe embed), documentos (ícone + download)
+    - Botão de download para todos os tipos de mídia
+    - Overlay com backdrop blur; fecha ao clicar fora
+  - **Janela 24h WhatsApp** (`app/services/whatsapp_window_service.py`):
+    - Detecta conversas em status BOT com `last_message_at` entre 22h-24h atrás
+    - Envia nudge configurável por empresa via `extra_settings.whatsapp_nudge_message`
+    - Evita duplicata na mesma janela via `bot_context.window_nudge_sent_at`
+    - Endpoint `POST /api/v1/conversations/trigger-24h-check` (company_admin/master_admin) para chamar via cron
+    - Configurável: `whatsapp_nudge_enabled`, `whatsapp_nudge_hours_before` (padrão 2h), `whatsapp_nudge_message`
+  - **IA Assistente** (`app/services/ai_assistant_service.py`):
+    - `humanize_bot_response(text, company_ctx, current_step)` — reformula mensagens do bot para mais naturais
+    - `interpret_client_message(message, current_step, company_ctx)` — interpreta mensagens complexas do cliente
+    - `explain_step_to_client(current_step)` — gera explicação amigável quando cliente estiver confuso
+    - Usa `gpt-4o-mini`, degradação graciosa (retorna original se key ausente ou falha)
+    - Integrada em `ConversationService._maybe_humanize_response()` — chamada APÓS o fluxo determinístico, ANTES do envio
+    - Ativação opt-in por empresa: `extra_settings.ai_humanize_enabled = true`
+    - Tom configurável: `extra_settings.ai_tone`
+    - Regras de segurança: não altera valores, medidas, cálculos ou lógica do fluxo
+    - `OPENAI_API_KEY` env var necessária para ativar; `openai==1.54.4` e `pillow==10.4.0` adicionados ao requirements.txt
 
 ## Notes
 

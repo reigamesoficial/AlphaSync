@@ -1,0 +1,158 @@
+Depois de concluir o hardening da VPS, quero aplicar estes ajustes finais de produto no AlphaSync.
+
+Objetivo:
+fechar a experiência do sistema com nível profissional.
+
+1. PDF do orçamento
+
+* deixar o PDF visualmente bonito e consistente
+* corrigir qualquer bug de linhas, tabelas ou quebras
+* usar logo da empresa no topo, se existir
+* se não existir logo, renderizar normalmente sem falha visual
+* respeitar a regra show_measures_to_customer:
+
+  * se false, o PDF não pode mostrar medidas detalhadas
+  * se true, pode mostrar os itens normalmente
+
+2. Painel de conversas — preview de arquivos
+   Todos os arquivos enviados/recebidos devem ser visualizáveis no painel de conversas, não apenas baixáveis:
+
+* imagens com preview inline
+* vídeos com player embutido
+* PDFs com viewer embutido
+* manter botão de download também
+
+3. Janela de 24 horas do WhatsApp
+   Adicionar lógica para, perto de encerrar a janela de 24 horas da Meta, enviar uma mensagem amigável como:
+   "Posso te ajudar em mais alguma coisa?"
+   Essa lógica deve ser configurável e segura.
+
+4. Agora vamos implementar uma camada de IA para melhorar a experiência do cliente no chatbot.
+
+Importante:
+A IA NÃO deve substituir o fluxo determinístico existente.
+
+O sistema já possui um fluxo claro de atendimento por etapas (nome → endereço → planta → seleção → cor → malha → orçamento etc).
+Esse fluxo deve continuar sendo a base do sistema.
+
+A IA será utilizada apenas para tornar o atendimento mais natural e facilitar o autoatendimento do cliente.
+
+Objetivo da IA:
+Humanizar as respostas do bot e ajudar o cliente a entender melhor o que precisa enviar em cada etapa do fluxo.
+
+Regras importantes:
+
+1. O fluxo determinístico continua sendo a fonte de verdade.
+2. A IA não decide etapas do fluxo.
+3. A IA não pode alterar regras de negócio.
+4. A IA não pode gerar valores ou cálculos.
+5. A IA apenas melhora a comunicação com o cliente.
+
+A IA deve atuar em três pontos:
+
+1. Interpretação da mensagem do cliente
+   O cliente nem sempre responde exatamente como o bot espera.
+
+Exemplos:
+
+* cliente manda endereço incompleto
+* cliente manda medidas misturadas
+* cliente responde com frases naturais
+* cliente responde várias informações em uma mensagem só
+
+A IA deve ajudar a interpretar essas mensagens e mapear para o step correto do fluxo.
+
+2. Humanização das respostas do bot
+   O bot deve responder de forma mais natural, clara e amigável.
+
+Exemplo:
+
+Resposta rígida atual:
+"Informe a cor da rede."
+
+Resposta humanizada:
+"Perfeito! Agora preciso saber qual cor de rede você prefere.
+Temos branca, areia, preta e cinza. Qual delas você gostaria?"
+
+A IA deve reformular a resposta mantendo o conteúdo do fluxo.
+
+3. Guiar o cliente dentro do fluxo
+   Se o cliente ficar confuso, a IA pode ajudar explicando melhor o que precisa ser enviado.
+
+Exemplo:
+
+Se o bot precisa do endereço:
+"Pode me enviar o endereço completo onde será feita a instalação?
+Se tiver número do apartamento e bloco também ajuda bastante."
+
+Se precisa da planta:
+"Qual dessas plantas corresponde ao seu apartamento?"
+
+A IA deve ajudar o cliente a continuar o fluxo sem quebrar o processo.
+
+Importante sobre multiempresa:
+
+Cada empresa pode ter:
+
+* estilo de linguagem diferente
+* nome do bot diferente
+* forma de atendimento diferente
+
+A IA deve receber no contexto:
+
+* nome da empresa
+* domínio de serviço
+* nome do bot
+* regras da empresa
+
+Para adaptar a comunicação.
+
+Importante sobre segurança:
+
+A IA nunca deve:
+
+* acessar dados de outra empresa
+* alterar valores
+* alterar medidas
+* alterar cálculos
+* alterar etapas do fluxo
+
+Ela apenas reformula textos e interpreta mensagens.
+
+Arquitetura esperada:
+
+Criar um serviço de IA, por exemplo:
+app/services/ai_assistant_service.py
+
+Funções principais:
+
+* interpretar mensagem do cliente
+* reformular resposta do bot
+* melhorar explicações do fluxo
+
+Esse serviço deve ser chamado dentro do chatbot_flow apenas quando necessário, sem quebrar o fluxo existente.
+
+Entrega esperada:
+
+1. análise de onde integrar a IA no chatbot_flow
+2. implementação do serviço de IA
+3. integração gradual no fluxo
+4. testes para garantir que o fluxo determinístico continua funcionando
+5. exemplos de mensagens antes e depois da humanização
+ 
+IA híbrida para apoio ao atendimento
+   Quero estruturar uma camada de IA que auxilie o atendimento sem substituir completamente a lógica determinística.
+
+
+
+* manter o fluxo determinístico como base
+* IA entra como copiloto e apoio
+* não quebrar as regras já existentes do protection_network e dos outros domínios
+
+
+Quero que você:
+
+1. primeiro analise como implementar isso com segurança
+2. proponha a ordem ideal
+3. depois implemente em etapas pequenas
+4. mostre arquivos alterados e impactos no sistema

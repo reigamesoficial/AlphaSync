@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from decimal import Decimal
 from io import BytesIO
 from typing import Any
@@ -11,12 +12,15 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm, mm
 from reportlab.platypus import (
     HRFlowable,
+    Image,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
     Table,
     TableStyle,
 )
+
+logger = logging.getLogger("alphasync.pdf")
 
 _DARK = colors.HexColor("#1e293b")
 _BRAND = colors.HexColor("#6366f1")
@@ -54,13 +58,64 @@ def _area_m2(width_cm: Any, height_cm: Any, qty: int) -> str:
         return "—"
 
 
+def _fetch_logo_image(logo_url: str, max_w: float = 4 * cm, max_h: float = 1.5 * cm) -> Image | None:
+    """
+    Baixa o logo da URL e cria um Image do ReportLab.
+    Retorna None se falhar (sem lançar exceção).
+    """
+    if not logo_url:
+        return None
+    try:
+        import requests
+        from PIL import Image as PILImage
+
+        resp = requests.get(logo_url, timeout=5)
+        resp.raise_for_status()
+
+        img_bytes = BytesIO(resp.content)
+        pil_img = PILImage.open(img_bytes)
+
+        orig_w, orig_h = pil_img.size
+        if orig_w == 0 or orig_h == 0:
+            return None
+
+        ratio = orig_w / orig_h
+        target_w = max_w
+        target_h = target_w / ratio
+
+        if target_h > max_h:
+            target_h = max_h
+            target_w = target_h * ratio
+
+        img_bytes.seek(0)
+        rl_img = Image(img_bytes, width=target_w, height=target_h)
+        return rl_img
+    except Exception as exc:
+        logger.debug("Logo fetch failed (%s): %s", logo_url, exc)
+        return None
+
+
 def generate_quote_pdf(
     *,
     quote: Any,
     company_name: str,
     brand_name: str | None = None,
     quote_prefix: str = "ORC",
+    logo_url: str | None = None,
+    show_measures: bool = True,
 ) -> bytes:
+    """
+    Gera o PDF do orçamento.
+
+    Args:
+        quote: objeto Quote com .items, .client, .subtotal, etc.
+        company_name: nome da empresa.
+        brand_name: nome da marca (exibido no cabeçalho, sobrepõe company_name).
+        quote_prefix: prefixo do código do orçamento.
+        logo_url: URL do logo da empresa (opcional). Renderizado no cabeçalho.
+        show_measures: se False, oculta colunas de dimensão e área no PDF
+                       (respeita a flag show_measures_to_customer da empresa).
+    """
     buffer = BytesIO()
     page_w, page_h = A4
     avail_w = page_w - 4 * cm
@@ -119,26 +174,88 @@ def generate_quote_pdf(
     story = []
     col_half = avail_w / 2
 
-    header_rows: list[list] = [
-        [Paragraph(display_name, s_company), Paragraph("ORÇAMENTO", s_right_lg)],
-        [Paragraph("Serviços de instalação", s_sub), Paragraph(f"<b>N° {quote_code}</b>", s_right)],
-        [Paragraph("", s_sub), Paragraph(f"Emitido em: {issued_str}", s_right)],
-    ]
-    if valid_str:
-        header_rows.append([Paragraph("", s_sub), Paragraph(f"Válido até: {valid_str}", s_right)])
+    # ── Cabeçalho ─────────────────────────────────────────────────────────────
+    logo_img = _fetch_logo_image(logo_url) if logo_url else None
 
-    header_tbl = Table(header_rows, colWidths=[col_half, col_half])
-    header_tbl.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("TOPPADDING", (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-        ("LEFTPADDING", (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-    ]))
-    story.append(header_tbl)
+    if logo_img:
+        # Com logo: logo à esquerda, bloco de título à direita
+        title_block = Table(
+            [
+                [Paragraph("ORÇAMENTO", s_right_lg)],
+                [Paragraph(f"<b>N° {quote_code}</b>", s_right)],
+                [Paragraph(f"Emitido em: {issued_str}", s_right)],
+            ],
+            colWidths=[col_half],
+        )
+        title_block.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ]))
+
+        logo_block = Table([[logo_img]], colWidths=[col_half])
+        logo_block.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ]))
+
+        header_tbl = Table([[logo_block, title_block]], colWidths=[col_half, col_half])
+        header_tbl.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+        ]))
+
+        if valid_str:
+            # Adiciona validade abaixo da linha de data
+            valid_para = Paragraph(f"Válido até: {valid_str}", s_right)
+            story.append(header_tbl)
+            story.append(Spacer(1, 1 * mm))
+            outer = Table([[Paragraph("", s_body), valid_para]], colWidths=[col_half, col_half])
+            outer.setStyle(TableStyle([
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]))
+            story.append(outer)
+        else:
+            story.append(header_tbl)
+
+        # Subtítulo da empresa abaixo do logo
+        story.append(Spacer(1, 1 * mm))
+        story.append(Paragraph(display_name, ps("co_sm", fontSize=10, textColor=_DARK, fontName="Helvetica-Bold")))
+    else:
+        # Sem logo: layout texto original (nome da empresa à esquerda)
+        header_rows: list[list] = [
+            [Paragraph(display_name, s_company), Paragraph("ORÇAMENTO", s_right_lg)],
+            [Paragraph("Serviços de instalação", s_sub), Paragraph(f"<b>N° {quote_code}</b>", s_right)],
+            [Paragraph("", s_sub), Paragraph(f"Emitido em: {issued_str}", s_right)],
+        ]
+        if valid_str:
+            header_rows.append([Paragraph("", s_sub), Paragraph(f"Válido até: {valid_str}", s_right)])
+
+        header_tbl = Table(header_rows, colWidths=[col_half, col_half])
+        header_tbl.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ]))
+        story.append(header_tbl)
+
     story.append(Spacer(1, 3 * mm))
     story.append(HRFlowable(width="100%", thickness=1.5, color=_BRAND, spaceAfter=4 * mm))
 
+    # ── Dados do cliente ───────────────────────────────────────────────────────
     story.append(Paragraph("DADOS DO CLIENTE", s_section))
 
     label_w = 2.5 * cm
@@ -173,20 +290,33 @@ def generate_quote_pdf(
     story.append(client_box)
     story.append(Spacer(1, 5 * mm))
 
+    # ── Tabela de itens ────────────────────────────────────────────────────────
     items = list(getattr(quote, "items", []) or [])
     if items:
         story.append(Paragraph("ITENS DO ORÇAMENTO", s_section))
 
-        cw = [avail_w * r for r in (0.38, 0.13, 0.07, 0.12, 0.14, 0.16)]
+        if show_measures:
+            # Tabela completa: Descrição | Dimensões | Qtd | Área | Preço/m² | Total
+            cw = [avail_w * r for r in (0.38, 0.13, 0.07, 0.12, 0.14, 0.16)]
+            header_row: list = [
+                Paragraph("Descrição", s_th),
+                Paragraph("Dim. (m)", s_th),
+                Paragraph("Qtd", s_th_r),
+                Paragraph("Área m²", s_th_r),
+                Paragraph("Preço/m²", s_th_r),
+                Paragraph("Total", s_th_r),
+            ]
+        else:
+            # Tabela simplificada: sem dimensões e área (show_measures_to_customer=False)
+            cw = [avail_w * r for r in (0.60, 0.10, 0.14, 0.16)]
+            header_row = [
+                Paragraph("Descrição", s_th),
+                Paragraph("Qtd", s_th_r),
+                Paragraph("Preço/m²", s_th_r),
+                Paragraph("Total", s_th_r),
+            ]
 
-        tbl_data: list[list] = [[
-            Paragraph("Descrição", s_th),
-            Paragraph("Dim. (m)", s_th),
-            Paragraph("Qtd", s_th_r),
-            Paragraph("Área m²", s_th_r),
-            Paragraph("Preço/m²", s_th_r),
-            Paragraph("Total", s_th_r),
-        ]]
+        tbl_data: list[list] = [header_row]
 
         for it in items:
             desc = str(getattr(it, "description", "") or "—")
@@ -197,22 +327,32 @@ def generate_quote_pdf(
             total_p = getattr(it, "total_price", Decimal("0.00"))
             it_notes = str(getattr(it, "notes", None) or "")
 
-            dim_str = f"{_dim_m(w_cm)} × {_dim_m(h_cm)}" if w_cm and h_cm else "—"
-            area_str = _area_m2(w_cm, h_cm, qty) if w_cm and h_cm else "—"
-
             desc_cell: list = [Paragraph(desc[:70], s_td)]
             if it_notes:
                 desc_cell.append(Paragraph(it_notes[:90], s_td_muted))
 
-            tbl_data.append([
-                desc_cell,
-                Paragraph(dim_str, s_td),
-                Paragraph(str(qty), s_td_r),
-                Paragraph(area_str, s_td_r),
-                Paragraph(_money(unit_p), s_td_r),
-                Paragraph(_money(total_p), s_td_r),
-            ])
+            if show_measures:
+                dim_str = f"{_dim_m(w_cm)} × {_dim_m(h_cm)}" if w_cm and h_cm else "—"
+                area_str = _area_m2(w_cm, h_cm, qty) if w_cm and h_cm else "—"
+                row = [
+                    desc_cell,
+                    Paragraph(dim_str, s_td),
+                    Paragraph(str(qty), s_td_r),
+                    Paragraph(area_str, s_td_r),
+                    Paragraph(_money(unit_p), s_td_r),
+                    Paragraph(_money(total_p), s_td_r),
+                ]
+            else:
+                row = [
+                    desc_cell,
+                    Paragraph(str(qty), s_td_r),
+                    Paragraph(_money(unit_p), s_td_r),
+                    Paragraph(_money(total_p), s_td_r),
+                ]
 
+            tbl_data.append(row)
+
+        n_cols = 6 if show_measures else 4
         items_tbl = Table(tbl_data, colWidths=cw)
         items_tbl.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), _DARK),
@@ -223,7 +363,7 @@ def generate_quote_pdf(
             ("BOTTOMPADDING", (0, 1), (-1, -1), 5),
             ("LEFTPADDING", (0, 0), (-1, -1), 6),
             ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-            ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
+            ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("ROWBACKGROUNDS", (0, 1), (-1, -1), [_WHITE, _LIGHT_BG]),
             ("LINEBELOW", (0, 0), (-1, 0), 0.5, _BRAND),
@@ -234,6 +374,7 @@ def generate_quote_pdf(
         story.append(items_tbl)
         story.append(Spacer(1, 4 * mm))
 
+    # ── Totais ────────────────────────────────────────────────────────────────
     subtotal = Decimal(str(getattr(quote, "subtotal", "0.00") or "0.00"))
     discount = Decimal(str(getattr(quote, "discount", "0.00") or "0.00"))
     total_value = Decimal(str(getattr(quote, "total_value", "0.00") or "0.00"))
@@ -274,6 +415,7 @@ def generate_quote_pdf(
     ]))
     story.append(fin_outer)
 
+    # ── Observações ───────────────────────────────────────────────────────────
     notes = str(getattr(quote, "notes", None) or "")
     if notes:
         story.append(Spacer(1, 5 * mm))
@@ -281,9 +423,15 @@ def generate_quote_pdf(
         story.append(Paragraph("OBSERVAÇÕES", s_section))
         story.append(Paragraph(notes, s_body))
 
+    # ── Rodapé ────────────────────────────────────────────────────────────────
     story.append(Spacer(1, 8 * mm))
     story.append(HRFlowable(width="100%", thickness=0.5, color=_BORDER, spaceAfter=3 * mm))
     story.append(Paragraph(f"Documento gerado em {issued_str} · {display_name}", s_center))
+    if not show_measures:
+        story.append(Paragraph(
+            "* Medidas detalhadas disponíveis mediante solicitação.",
+            ps("fn", fontSize=7, textColor=_MUTED, fontName="Helvetica", alignment=TA_CENTER),
+        ))
 
     doc.build(story)
     return buffer.getvalue()

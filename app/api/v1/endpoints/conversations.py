@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.security import get_current_active_user
 from app.core.tenancy import get_tenant_company_id
 from app.db.connection import get_db
-from app.db.models import ConversationMessage, ConversationStatus, User
+from app.db.models import ConversationMessage, ConversationStatus, User, UserRole
 from app.repositories.conversations import ConversationsRepository
 from app.schemas.common import PaginatedResponse
 from app.schemas.conversation import ConversationMessageResponse, ConversationResponse
@@ -75,3 +75,31 @@ def list_conversation_messages(
         .order_by(ConversationMessage.created_at.asc())
     )
     return list(db.scalars(stmt).all())
+
+
+@router.post("/trigger-24h-check", tags=["Conversations"])
+def trigger_24h_window_check(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Dispara a verificação da janela de 24h do WhatsApp para todas as empresas.
+    Envia mensagens de reengajamento para conversas prestes a perder a janela.
+
+    Acesso: company_admin ou master_admin.
+    Ideal para chamar via cron a cada 30 minutos.
+    """
+    if current_user.role not in (UserRole.MASTER_ADMIN, UserRole.COMPANY_ADMIN):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acesso negado.",
+        )
+
+    from app.services.whatsapp_window_service import check_and_nudge_expiring_windows
+
+    stats = check_and_nudge_expiring_windows(db)
+    return {
+        "ok": True,
+        "stats": stats,
+        "message": f"Verificação concluída. {stats.get('nudged', 0)} nudges enviados.",
+    }
