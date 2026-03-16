@@ -17,7 +17,7 @@ class PestControlDomain(BaseDomain):
     label = "Controle de Pragas"
     capabilities = DomainCapabilities(
         has_chatbot_flow=True,
-        has_pricing=False,
+        has_pricing=True,
         has_job_rules=False,
         has_pdf_builder=False,
         has_scheduling=True,
@@ -25,6 +25,9 @@ class PestControlDomain(BaseDomain):
 
     def get_chatbot_flow(self):
         return _safe_import("app.domains.pest_control.chatbot_flow")
+
+    def get_pricing_service(self):
+        return _safe_import("app.domains.pest_control.pricing_rules")
 
     def get_default_settings(self) -> dict:
         return {

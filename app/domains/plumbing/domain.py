@@ -27,7 +27,7 @@ class PlumbingDomain(BaseDomain):
         return _safe_import("app.domains.plumbing.chatbot_flow")
 
     def get_pricing_service(self):
-        return _safe_import("app.domains.plumbing.pricing")
+        return _safe_import("app.domains.plumbing.pricing_rules")
 
     def get_default_settings(self) -> dict:
         return {

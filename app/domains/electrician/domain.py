@@ -27,7 +27,7 @@ class ElectricianDomain(BaseDomain):
         return _safe_import("app.domains.electrician.chatbot_flow")
 
     def get_pricing_service(self):
-        return _safe_import("app.domains.electrician.pricing")
+        return _safe_import("app.domains.electrician.pricing_rules")
 
     def get_default_settings(self) -> dict:
         return {

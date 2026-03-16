@@ -1,0 +1,174 @@
+Precisamos implementar fluxos completos para todos os domínios do sistema AlphaSync, seguindo a mesma arquitetura já usada no domínio protection_network.
+
+Objetivo:
+Cada domínio deve ter seu próprio fluxo de atendimento, produtos e regras de orçamento.
+
+Domínios que precisam ser implementados:
+
+cleaning
+electrician
+glass_installation
+hvac
+pest_control
+plumbing
+security_cameras
+
+Importante:
+
+1. O domínio protection_network NÃO deve ser alterado.
+2. Cada domínio deve ter seu próprio chatbot_flow.
+3. Cada domínio deve possuir:
+
+   * products.py
+   * pricing_rules.py
+   * chatbot_flow.py
+
+Estrutura esperada:
+
+app/domains/<domain>/
+
+products.py
+pricing_rules.py
+chatbot_flow.py
+
+Cada domínio deve suportar:
+
+1 coleta de dados do cliente
+2 identificação do tipo de serviço
+3 perguntas técnicas específicas
+4 geração de orçamento
+5 confirmação do cliente
+6 criação de orçamento no sistema
+7 agendamento
+
+O fluxo deve seguir lógica realista de atendimento técnico.
+
+Exemplo de domínios:
+
+cleaning
+Serviços:
+
+* limpeza residencial
+* limpeza comercial
+* limpeza pós obra
+* limpeza de mudança
+* limpeza pesada
+* limpeza de estofados
+
+Perguntas principais:
+
+* tamanho do local
+* quantidade de cômodos
+* frequência da limpeza
+* serviços adicionais
+
+electrician
+Serviços:
+
+* instalação elétrica
+* troca de tomada
+* troca de disjuntor
+* instalação de luminária
+* instalação de chuveiro
+* curto circuito
+* manutenção elétrica
+
+Perguntas principais:
+
+* tipo de problema
+* local do serviço
+* urgência
+* fotos opcionais
+
+hvac
+Serviços:
+
+* instalação ar condicionado
+* manutenção
+* limpeza
+* carga de gás
+* reparo
+
+Perguntas principais:
+
+* tipo de equipamento
+* BTU
+* problema
+* fotos opcionais
+
+pest_control
+Serviços:
+
+* dedetização
+* desratização
+* descupinização
+* controle de baratas
+* controle de formigas
+
+Perguntas principais:
+
+* tipo de praga
+* local
+* nível de infestação
+* presença de pets
+
+plumbing
+Serviços:
+
+* vazamento
+* desentupimento
+* troca de torneira
+* reparo de descarga
+* instalação hidráulica
+
+Perguntas principais:
+
+* tipo de problema
+* local
+* urgência
+* fotos opcionais
+
+security_cameras
+Serviços:
+
+* instalação
+* manutenção
+* ampliação
+* configuração remota
+
+Perguntas principais:
+
+* tipo de local
+* quantidade de câmeras
+* gravação (DVR/NVR)
+* acesso remoto
+
+glass_installation
+Serviços:
+
+* box de banheiro
+* janela de vidro
+* porta de vidro
+* espelho sob medida
+* fechamento de varanda
+
+Perguntas principais:
+
+* tipo de vidro
+* largura
+* altura
+* acabamento
+
+Cada domínio deve:
+
+* gerar orçamento usando o sistema de quotes existente
+* suportar agendamento
+* funcionar no mesmo webhook do WhatsApp
+* respeitar multiempresa
+* permitir personalização por empresa
+
+Após implementar:
+
+1 mostrar os arquivos criados
+2 validar os fluxos
+3 testar um fluxo completo para cada domínio

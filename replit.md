@@ -158,6 +158,17 @@ Master admin has `company_id = null` in JWT — cannot access tenant endpoints (
   - **docker-compose.yml**: 6 serviços (postgres, redis, backend, frontend, nginx, migrations); healthchecks em todos; profiles para migrations; volumes nomeados
   - **nginx/nginx.conf**: reverse proxy com rate limiting (api: 60r/m, auth: 10r/m), headers de segurança, SSL comentado pronto para ativar
   - **DEPLOY.md**: guia completo de deploy em VPS (setup, first deploy, SSL, backups, atualizações, checklist de 15 itens)
+- [x] Phase 6: Fluxos completos para todos os 7 domínios restantes
+  - `app/domains/_shared/flow_helpers.py` — helpers compartilhados por todos os domínios
+  - **cleaning**: chatbot_flow.py (9 etapas) + products.py + pricing_rules.py (R$180-1100)
+  - **electrician**: chatbot_flow.py (6 etapas) + products.py + pricing_rules.py (R$120-600)
+  - **hvac**: chatbot_flow.py (7 etapas, BTU multipliers) + products.py + pricing_rules.py (R$150-800)
+  - **pest_control**: chatbot_flow.py (8 etapas, pergunta pets) + products.py + pricing_rules.py (R$150-1920)
+  - **plumbing**: chatbot_flow.py (7 etapas, local do problema) + products.py + pricing_rules.py (R$120-560)
+  - **security_cameras**: chatbot_flow.py (7 etapas, cálculo por câmera) + products.py + pricing_rules.py (R$200-2500)
+  - **glass_installation**: chatbot_flow.py (7 etapas, cálculo por m²) + products.py + pricing_rules.py (R$200-1500+)
+  - Todos os domain.py atualizados: `has_pricing=True`, `get_pricing_service()` → pricing_rules
+  - 100% dos fluxos simulados e validados; todos chegam a `quote_confirm` com `quote_preview` correto
 - [x] Phase 5 (Parte 5 — produto): PDF, conversas, IA, janela 24h WhatsApp
   - **PDF melhorado** (`app/services/pdf_service.py`):
     - Parâmetro `logo_url`: baixa logo via requests + PIL, renderiza no cabeçalho com aspect ratio correto; degrada sem logo sem erro visual
