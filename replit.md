@@ -2,6 +2,24 @@
 
 Multi-tenant SaaS platform for service businesses with WhatsApp chatbot integration. Includes a FastAPI backend and a React frontend panel.
 
+## Recent Features (2026-03-17)
+
+### Scheduling Business Rules
+- **Past-date blocking**: `POST/PATCH /appointments` now rejects dates in the past (422 error)
+- **Installer conflict detection**: Detects overlapping active appointments for the same installer (409 error)
+- **Configurable time slots**: `GET /appointments/slots?date=YYYY-MM-DD&installer_id=X` returns available/busy slots
+- **Company schedule config**: `GET/PATCH /company/schedule-config` (slot_minutes, workday_start/end, allowed_weekdays) stored in `CompanySettings.extra_settings.schedule`
+- **Installer availability**: `GET /company/installers` + `PATCH /company/installers/{id}/schedule` — per-installer work hours/days stored in `CompanySettings.extra_settings.installer_schedules`
+
+### Bot Flow Message Configuration
+- `GET/PATCH /company/flow-config` — editable greeting/fallback/tone per domain (all 8)
+- Stored in `CompanySettings.extra_settings.{domain_key}.bot_messages`
+- Falls back to `DomainDefinition.config_json` defaults when no company override
+
+### Frontend Updates
+- **Schedule.tsx**: Slot picker (replaces raw datetime inputs), past-date `min` restriction, installer selector, conflict error passthrough
+- **Settings.tsx**: 2 new tabs — "Agendamento" (slot config + per-installer availability), "Fluxo do Bot" (domain-specific bot messages with expandable cards)
+
 ## Architecture
 
 ### Backend (FastAPI + Python 3.12)

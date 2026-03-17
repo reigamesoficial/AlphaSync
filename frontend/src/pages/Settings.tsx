@@ -2,16 +2,36 @@ import { useEffect, useState } from 'react'
 import {
   Settings as SettingsIcon, Save, Bot, Palette, Globe,
   AlertCircle, CheckCircle, Shield, Eye, EyeOff, Plus, X,
+  CalendarDays, UserCheck, ChevronDown, ChevronUp, RotateCcw,
 } from 'lucide-react'
 import Topbar from '../components/layout/Topbar'
 import { PageSpinner } from '../components/ui/Spinner'
 import { getCompanySettings, updateCompanySettings } from '../api/company'
 import { getPNSettings, updatePNSettings } from '../api/measures'
+import {
+  listInstallers, updateInstallerSchedule,
+  getScheduleConfig, updateScheduleConfig,
+  getFlowConfig, updateFlowConfig,
+} from '../api/company'
+import type {
+  InstallerWithSchedule, InstallerScheduleConfig,
+  ScheduleConfig, DomainFlowConfig, DomainBotMessages,
+} from '../api/company'
 import type { CompanySettings, PNSettings } from '../types'
 
 const TIMEZONES = ['America/Sao_Paulo', 'America/Manaus', 'America/Belem', 'America/Fortaleza', 'America/Recife']
 const CURRENCIES = ['BRL', 'USD', 'EUR']
-type Tab = 'empresa' | 'protection_network'
+const SLOT_OPTIONS = [
+  { value: 60, label: '1 hora' },
+  { value: 90, label: '1h 30min' },
+  { value: 120, label: '2 horas' },
+  { value: 180, label: '3 horas' },
+  { value: 240, label: '4 horas' },
+]
+const WEEKDAY_LABELS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
+const TONE_OPTIONS = ['amigável', 'profissional', 'objetivo', 'técnico', 'descontraído']
+
+type Tab = 'empresa' | 'protection_network' | 'agendamento' | 'fluxo_bot'
 
 interface SectionProps { title: string; icon: React.ReactNode; children: React.ReactNode }
 function Section({ title, icon, children }: SectionProps) {
@@ -28,11 +48,14 @@ function Section({ title, icon, children }: SectionProps) {
   )
 }
 
-interface FieldProps { label: string; children: React.ReactNode }
-function Field({ label, children }: FieldProps) {
+interface FieldProps { label: string; hint?: string; children: React.ReactNode }
+function Field({ label, hint, children }: FieldProps) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-start py-3 border-b border-surface-700 last:border-0">
-      <label className="text-slate-400 text-sm font-medium pt-1.5">{label}</label>
+      <div className="pt-1.5">
+        <label className="text-slate-400 text-sm font-medium block">{label}</label>
+        {hint && <p className="text-slate-600 text-xs mt-0.5">{hint}</p>}
+      </div>
       <div className="sm:col-span-2">{children}</div>
     </div>
   )
@@ -87,6 +110,18 @@ export default function Settings() {
   const [form, setForm] = useState<Partial<CompanySettings>>({})
   const [pnForm, setPnForm] = useState<Partial<PNSettings>>({})
 
+  const [installers, setInstallers] = useState<InstallerWithSchedule[]>([])
+  const [scheduleConfig, setScheduleConfig] = useState<ScheduleConfig>({
+    slot_minutes: 120, workday_start: '08:00', workday_end: '18:00', allowed_weekdays: [0, 1, 2, 3, 4],
+  })
+  const [installerSchedules, setInstallerSchedules] = useState<Record<number, InstallerScheduleConfig>>({})
+  const [savingInstaller, setSavingInstaller] = useState<number | null>(null)
+
+  const [flowConfigs, setFlowConfigs] = useState<DomainFlowConfig[]>([])
+  const [expandedDomain, setExpandedDomain] = useState<string | null>(null)
+  const [flowForms, setFlowForms] = useState<Record<string, DomainBotMessages>>({})
+  const [savingDomain, setSavingDomain] = useState<string | null>(null)
+
   useEffect(() => {
     Promise.all([getCompanySettings(), getPNSettings()])
       .then(([s, pn]) => {
@@ -107,6 +142,29 @@ export default function Settings() {
       .catch(() => setToast({ type: 'error', msg: 'Erro ao carregar configurações.' }))
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (tab === 'agendamento') {
+      Promise.all([listInstallers(), getScheduleConfig()])
+        .then(([inst, cfg]) => {
+          setInstallers(inst)
+          setScheduleConfig(cfg)
+          const schedules: Record<number, InstallerScheduleConfig> = {}
+          inst.forEach(i => { schedules[i.id] = { ...i.schedule } })
+          setInstallerSchedules(schedules)
+        })
+        .catch(() => showToast('error', 'Erro ao carregar configurações de agendamento.'))
+    } else if (tab === 'fluxo_bot') {
+      getFlowConfig()
+        .then(configs => {
+          setFlowConfigs(configs)
+          const forms: Record<string, DomainBotMessages> = {}
+          configs.forEach(c => { forms[c.key] = { ...c.messages } })
+          setFlowForms(forms)
+        })
+        .catch(() => showToast('error', 'Erro ao carregar configurações do fluxo.'))
+    }
+  }, [tab])
 
   function showToast(type: 'success' | 'error', msg: string) {
     setToast({ type, msg })
@@ -151,11 +209,70 @@ export default function Settings() {
     }
   }
 
+  async function handleSaveScheduleConfig() {
+    setSaving(true)
+    try {
+      const updated = await updateScheduleConfig(scheduleConfig)
+      setScheduleConfig(updated)
+      showToast('success', 'Configuração de horários salva!')
+    } catch {
+      showToast('error', 'Erro ao salvar configuração de horários.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleSaveInstallerSchedule(userId: number) {
+    const cfg = installerSchedules[userId]
+    if (!cfg) return
+    setSavingInstaller(userId)
+    try {
+      const updated = await updateInstallerSchedule(userId, cfg)
+      setInstallers(prev => prev.map(i => i.id === userId ? { ...i, schedule: updated.schedule } : i))
+      showToast('success', 'Disponibilidade do instalador salva!')
+    } catch {
+      showToast('error', 'Erro ao salvar disponibilidade.')
+    } finally {
+      setSavingInstaller(null)
+    }
+  }
+
+  async function handleSaveDomainFlow(key: string) {
+    const msgs = flowForms[key]
+    if (!msgs) return
+    setSavingDomain(key)
+    try {
+      const updated = await updateFlowConfig(key, msgs)
+      setFlowConfigs(prev => prev.map(c => c.key === key ? updated : c))
+      showToast('success', 'Mensagens do fluxo salvas!')
+    } catch {
+      showToast('error', 'Erro ao salvar mensagens.')
+    } finally {
+      setSavingDomain(null)
+    }
+  }
+
   function field(key: keyof CompanySettings) {
     return {
       value: (form[key] as string) ?? '',
       onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
         setForm((prev) => ({ ...prev, [key]: e.target.value })),
+    }
+  }
+
+  function toggleWeekday(day: number, target: 'schedule' | number) {
+    if (target === 'schedule') {
+      const current = scheduleConfig.allowed_weekdays
+      const updated = current.includes(day) ? current.filter(d => d !== day) : [...current, day].sort()
+      setScheduleConfig(prev => ({ ...prev, allowed_weekdays: updated }))
+    } else {
+      const userId = target as number
+      const current = installerSchedules[userId]?.allowed_weekdays ?? [0, 1, 2, 3, 4]
+      const updated = current.includes(day) ? current.filter(d => d !== day) : [...current, day].sort()
+      setInstallerSchedules(prev => ({
+        ...prev,
+        [userId]: { ...prev[userId], allowed_weekdays: updated },
+      }))
     }
   }
 
@@ -167,6 +284,13 @@ export default function Settings() {
       </div>
     )
   }
+
+  const TABS: { key: Tab; label: string }[] = [
+    { key: 'empresa', label: 'Empresa' },
+    { key: 'protection_network', label: 'Protection Network' },
+    { key: 'agendamento', label: 'Agendamento' },
+    { key: 'fluxo_bot', label: 'Fluxo do Bot' },
+  ]
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
@@ -186,15 +310,12 @@ export default function Settings() {
             </div>
           )}
 
-          <div className="flex gap-1 p-1 bg-surface-800 border border-surface-600 rounded-xl w-fit">
-            {([
-              { key: 'empresa', label: 'Empresa' },
-              { key: 'protection_network', label: 'Protection Network' },
-            ] as { key: Tab; label: string }[]).map(({ key, label }) => (
+          <div className="flex gap-1 p-1 bg-surface-800 border border-surface-600 rounded-xl w-fit flex-wrap">
+            {TABS.map(({ key, label }) => (
               <button
                 key={key}
                 onClick={() => setTab(key)}
-                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                   tab === key
                     ? 'bg-brand-600 text-white'
                     : 'text-slate-400 hover:text-white'
@@ -387,6 +508,281 @@ export default function Settings() {
                   )}
                 </button>
               </div>
+            </>
+          )}
+
+          {tab === 'agendamento' && (
+            <>
+              <Section title="Horários de funcionamento" icon={<CalendarDays className="w-4 h-4" />}>
+                <Field label="Duração do bloco" hint="Tempo padrão de cada agendamento">
+                  <select
+                    className="input"
+                    value={scheduleConfig.slot_minutes}
+                    onChange={(e) => setScheduleConfig(prev => ({ ...prev, slot_minutes: Number(e.target.value) }))}
+                  >
+                    {SLOT_OPTIONS.map(o => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Início do expediente">
+                  <input
+                    type="time"
+                    className="input"
+                    value={scheduleConfig.workday_start}
+                    onChange={(e) => setScheduleConfig(prev => ({ ...prev, workday_start: e.target.value }))}
+                  />
+                </Field>
+                <Field label="Fim do expediente">
+                  <input
+                    type="time"
+                    className="input"
+                    value={scheduleConfig.workday_end}
+                    onChange={(e) => setScheduleConfig(prev => ({ ...prev, workday_end: e.target.value }))}
+                  />
+                </Field>
+                <Field label="Dias de trabalho">
+                  <div className="flex gap-2 flex-wrap">
+                    {WEEKDAY_LABELS.map((label, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => toggleWeekday(idx, 'schedule')}
+                        className={`w-10 h-10 rounded-xl text-xs font-semibold border transition-all ${
+                          scheduleConfig.allowed_weekdays.includes(idx)
+                            ? 'bg-brand-600 text-white border-brand-500'
+                            : 'bg-surface-700 text-slate-500 border-surface-600 hover:border-surface-500'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+                <div className="pt-3 flex justify-end">
+                  <button onClick={handleSaveScheduleConfig} disabled={saving} className="btn-primary flex items-center gap-2">
+                    {saving ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save className="w-4 h-4" />}
+                    {saving ? 'Salvando...' : 'Salvar horários'}
+                  </button>
+                </div>
+              </Section>
+
+              <Section title="Disponibilidade por instalador" icon={<UserCheck className="w-4 h-4" />}>
+                {installers.length === 0 ? (
+                  <div className="text-center py-8">
+                    <UserCheck className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+                    <p className="text-slate-500 text-sm">Nenhum instalador cadastrado.</p>
+                    <p className="text-slate-600 text-xs mt-1">Cadastre instaladores em Usuários para configurar disponibilidade.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {installers.map(installer => {
+                      const cfg = installerSchedules[installer.id] ?? installer.schedule
+                      return (
+                        <div key={installer.id} className="bg-surface-700/50 rounded-xl p-4 border border-surface-600">
+                          <div className="flex items-center gap-3 mb-4">
+                            <div className="w-8 h-8 rounded-full bg-brand-500/20 flex items-center justify-center text-brand-400 font-semibold text-sm shrink-0">
+                              {installer.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white text-sm font-medium">{installer.name}</p>
+                              <p className="text-slate-500 text-xs">{installer.email}</p>
+                            </div>
+                            {!installer.is_active && (
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">Inativo</span>
+                            )}
+                          </div>
+                          <div className="space-y-3">
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="text-slate-500 text-xs mb-1 block">Início</label>
+                                <input
+                                  type="time"
+                                  className="input text-sm"
+                                  value={cfg.work_start}
+                                  onChange={(e) => setInstallerSchedules(prev => ({
+                                    ...prev,
+                                    [installer.id]: { ...prev[installer.id], work_start: e.target.value },
+                                  }))}
+                                />
+                              </div>
+                              <div>
+                                <label className="text-slate-500 text-xs mb-1 block">Fim</label>
+                                <input
+                                  type="time"
+                                  className="input text-sm"
+                                  value={cfg.work_end}
+                                  onChange={(e) => setInstallerSchedules(prev => ({
+                                    ...prev,
+                                    [installer.id]: { ...prev[installer.id], work_end: e.target.value },
+                                  }))}
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <label className="text-slate-500 text-xs mb-2 block">Dias disponíveis</label>
+                              <div className="flex gap-1.5 flex-wrap">
+                                {WEEKDAY_LABELS.map((label, idx) => (
+                                  <button
+                                    key={idx}
+                                    onClick={() => toggleWeekday(idx, installer.id)}
+                                    className={`w-9 h-9 rounded-lg text-xs font-semibold border transition-all ${
+                                      cfg.allowed_weekdays.includes(idx)
+                                        ? 'bg-emerald-600/80 text-white border-emerald-500/50'
+                                        : 'bg-surface-700 text-slate-600 border-surface-600 hover:border-surface-500'
+                                    }`}
+                                  >
+                                    {label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="flex justify-end">
+                              <button
+                                onClick={() => handleSaveInstallerSchedule(installer.id)}
+                                disabled={savingInstaller === installer.id}
+                                className="btn-primary text-xs px-4 py-2 flex items-center gap-1.5"
+                              >
+                                {savingInstaller === installer.id
+                                  ? <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                  : <Save className="w-3.5 h-3.5" />
+                                }
+                                Salvar
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </Section>
+            </>
+          )}
+
+          {tab === 'fluxo_bot' && (
+            <>
+              <div className="card p-5">
+                <div className="flex items-center gap-2.5 mb-2">
+                  <div className="w-7 h-7 bg-brand-500/15 rounded-lg flex items-center justify-center text-brand-400">
+                    <Bot className="w-4 h-4" />
+                  </div>
+                  <h3 className="text-white font-semibold text-sm">Mensagens do fluxo por domínio</h3>
+                </div>
+                <p className="text-slate-500 text-xs">
+                  Configure as mensagens que o bot envia em cada domínio. Campos em branco utilizam os textos padrão do sistema.
+                </p>
+              </div>
+
+              {flowConfigs.length === 0 ? (
+                <div className="card p-12 text-center">
+                  <div className="w-12 h-12 bg-surface-700 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                    <Bot className="w-6 h-6 text-slate-500" />
+                  </div>
+                  <p className="text-slate-500 text-sm">Carregando configurações do fluxo...</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {flowConfigs.map(config => {
+                    const isOpen = expandedDomain === config.key
+                    const msgs = flowForms[config.key] ?? config.messages
+                    return (
+                      <div key={config.key} className="card overflow-hidden">
+                        <button
+                          onClick={() => setExpandedDomain(isOpen ? null : config.key)}
+                          className="w-full flex items-center gap-3 p-4 hover:bg-surface-700/30 transition-colors"
+                        >
+                          <div className="flex-1 flex items-center gap-3 min-w-0 text-left">
+                            <span className="text-white font-medium text-sm">{config.display_name}</span>
+                            {config.is_customized && (
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-brand-500/15 text-brand-400 border border-brand-500/20 shrink-0">
+                                Customizado
+                              </span>
+                            )}
+                          </div>
+                          {isOpen
+                            ? <ChevronUp className="w-4 h-4 text-slate-500 shrink-0" />
+                            : <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />
+                          }
+                        </button>
+
+                        {isOpen && (
+                          <div className="px-4 pb-4 pt-2 border-t border-surface-700 space-y-4">
+                            <div>
+                              <label className="text-slate-400 text-xs font-medium mb-1.5 block">
+                                Mensagem de boas-vindas
+                              </label>
+                              <textarea
+                                className="input min-h-[80px] resize-none text-sm"
+                                placeholder={config.messages.greeting || 'Texto padrão do sistema...'}
+                                value={msgs.greeting}
+                                onChange={(e) => setFlowForms(prev => ({
+                                  ...prev,
+                                  [config.key]: { ...prev[config.key], greeting: e.target.value },
+                                }))}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-slate-400 text-xs font-medium mb-1.5 block">
+                                Mensagem de fallback (não entendeu)
+                              </label>
+                              <textarea
+                                className="input min-h-[60px] resize-none text-sm"
+                                placeholder={config.messages.fallback || 'Texto padrão do sistema...'}
+                                value={msgs.fallback}
+                                onChange={(e) => setFlowForms(prev => ({
+                                  ...prev,
+                                  [config.key]: { ...prev[config.key], fallback: e.target.value },
+                                }))}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-slate-400 text-xs font-medium mb-1.5 block">Tom da conversa</label>
+                              <div className="relative">
+                                <select
+                                  className="input appearance-none pr-8 text-sm"
+                                  value={msgs.tone}
+                                  onChange={(e) => setFlowForms(prev => ({
+                                    ...prev,
+                                    [config.key]: { ...prev[config.key], tone: e.target.value },
+                                  }))}
+                                >
+                                  {TONE_OPTIONS.map(t => (
+                                    <option key={t} value={t} className="capitalize">{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                                  ))}
+                                </select>
+                                <ChevronDown className="w-4 h-4 text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between pt-1">
+                              <button
+                                onClick={() => setFlowForms(prev => ({
+                                  ...prev,
+                                  [config.key]: { greeting: '', fallback: '', tone: config.messages.tone },
+                                }))}
+                                className="flex items-center gap-1.5 text-slate-500 hover:text-slate-300 text-xs transition-colors"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                Restaurar padrão
+                              </button>
+                              <button
+                                onClick={() => handleSaveDomainFlow(config.key)}
+                                disabled={savingDomain === config.key}
+                                className="btn-primary text-xs px-4 py-2 flex items-center gap-1.5"
+                              >
+                                {savingDomain === config.key
+                                  ? <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                  : <Save className="w-3.5 h-3.5" />
+                                }
+                                Salvar mensagens
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </>
           )}
         </div>

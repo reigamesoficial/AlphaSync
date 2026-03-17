@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import {
   CalendarDays, Clock, MapPin, Plus, X, User, ChevronDown,
-  AlertCircle, CheckCircle2, Circle, RefreshCw, Ban, Filter,
+  AlertCircle, CheckCircle2, Circle, RefreshCw, Ban,
   UserCheck,
 } from 'lucide-react'
 import Topbar from '../components/layout/Topbar'
@@ -66,8 +66,6 @@ const FILTER_TABS = [
   { key: 'cancelled', label: 'Cancelados' },
 ]
 
-const WEEKDAY_LABELS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
-
 interface NewApptForm {
   client_id: string
   date: string
@@ -100,12 +98,6 @@ function isToday(iso: string) {
 function todayStr() {
   return new Date().toISOString().slice(0, 10)
 }
-function nowLocalStr() {
-  const now = new Date()
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`
-}
-
 export default function Schedule() {
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [clients, setClients] = useState<Client[]>([])
