@@ -1,0 +1,155 @@
+Quero fazer uma auditoria final do frontend e backend antes do deploy em VPS.
+
+Importante:
+- NÃO implementar novas features
+- NÃO refatorar o projeto
+- NÃO alterar arquitetura
+- apenas validar e apontar possíveis problemas
+
+Objetivo:
+verificar 3 pontos críticos finais do sistema:
+1. consistência do CRM
+2. consistência do financeiro
+3. responsividade básica do frontend
+
+==================================================
+PARTE 1 — VALIDAÇÃO DO CRM
+==================================================
+
+Quero que você verifique se o CRM (/crm) está usando dados reais do sistema ou dados mockados/simulados.
+
+Analise:
+
+1. De onde vêm os dados do pipeline:
+   - conversations?
+   - clients?
+   - quotes?
+   - appointments?
+
+2. Como os status do pipeline são definidos:
+   - Lead
+   - Contactado
+   - Visita Agendada
+   - Orçamento Enviado
+   - Ganho
+   - Perdido
+
+3. Se há consistência entre:
+   - status do lead no CRM
+   - status das conversas
+   - status dos orçamentos
+   - status dos agendamentos
+
+4. Se há risco de:
+   - dados duplicados
+   - inconsistência de status
+   - pipeline não refletir a realidade
+
+Entrega:
+- dizer se o CRM está usando dados reais ou mockados
+- explicar como os dados são montados
+- apontar qualquer inconsistência
+- sugerir ajustes (sem implementar)
+
+==================================================
+PARTE 2 — VALIDAÇÃO DO FINANCEIRO
+==================================================
+
+Quero que você valide a página /financial.
+
+Verifique:
+
+1. Como a receita está sendo calculada:
+   - vem de quotes?
+   - considera apenas status "fechado"?
+   - ignora cancelados?
+
+2. Como são calculados:
+   - ticket médio
+   - taxa de conversão
+   - número de clientes ativos
+
+3. Se os dados são:
+   - reais do banco
+   - ou mockados/simulados
+
+4. Se o endpoint:
+   GET /api/v1/dashboard/financial?months=N
+
+   está:
+   - correto
+   - consistente
+   - performático
+   - usando filtros corretos por empresa (multiempresa)
+
+5. Verificar riscos:
+   - valores incorretos
+   - contagem duplicada
+   - métricas inconsistentes
+
+Entrega:
+- explicar como os dados financeiros são calculados
+- confirmar se está pronto para produção
+- apontar qualquer inconsistência ou risco
+- sugerir ajustes (sem implementar)
+
+==================================================
+PARTE 3 — RESPONSIVIDADE DO FRONTEND
+==================================================
+
+Quero uma verificação rápida de responsividade.
+
+Analise:
+
+1. Sidebar:
+   - colapsa corretamente em telas menores?
+   - não quebra layout?
+
+2. Tabelas:
+   - têm scroll horizontal quando necessário?
+   - não quebram o layout?
+
+3. Cards e gráficos:
+   - se adaptam em telas menores?
+   - não sobrepõem conteúdo?
+
+4. Conversas (ChatDrawer):
+   - funciona bem em telas menores?
+   - não corta conteúdo?
+
+5. Páginas críticas:
+   - /dashboard
+   - /conversations
+   - /crm
+   - /financial
+   - /schedule
+
+Entrega:
+- dizer se está aceitável para produção
+- apontar problemas visuais relevantes
+- sugerir ajustes mínimos (sem implementar)
+
+==================================================
+ENTREGA FINAL
+==================================================
+
+Quero um relatório claro com:
+
+1. CRM
+   - status: OK / PARCIAL / PROBLEMA
+   - explicação
+
+2. Financeiro
+   - status: OK / PARCIAL / PROBLEMA
+   - explicação
+
+3. Responsividade
+   - status: OK / PARCIAL / PROBLEMA
+   - explicação
+
+4. Lista de riscos finais antes do deploy
+
+Importante:
+- não alterar código
+- não implementar nada ainda
+- apenas validar e diagnosticar
