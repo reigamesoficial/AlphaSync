@@ -1,0 +1,33 @@
+Implementação concluída
+Etapa 2 — Validações de agendamento (backend)
+app/repositories/appointments.py
+
+Novo método has_installer_conflict() — detecta sobreposição de horários ativos para o mesmo instalador
+app/api/v1/endpoints/appointments.py
+
+POST /appointments agora bloqueia datas passadas com erro 422
+PATCH /appointments/{id} também valida se o horário editado não está no passado
+Conflito de instalador: retorna 409 com mensagem clara se o instalador já tem agendamento no período
+Novo endpoint GET /appointments/slots?date=YYYY-MM-DD&installer_id=X — retorna blocos de horário {start_at, end_at, available} com base na configuração da empresa
+Etapa 3 — Configuração de horários e disponibilidade (backend)
+app/api/v1/endpoints/company.py — 5 novos endpoints:
+
+GET /company/schedule-config — slot_minutes, workday_start/end, dias da semana
+PATCH /company/schedule-config — salva na extra_settings.schedule
+GET /company/installers — lista instaladores com disponibilidade salva
+PATCH /company/installers/{id}/schedule — salva disponibilidade individual em extra_settings.installer_schedules
+Etapa 4 — Fluxo do bot por empresa (backend)
+GET /company/flow-config — retorna configuração merged (override da empresa + defaults do domínio) para os 8 domínios
+PATCH /company/flow-config — salva greeting, fallback e tom por domínio em extra_settings.{domain_key}.bot_messages
+Armazenamento 100% no JSON existente, sem migration necessária
+Etapa 5 — Frontend
+Schedule.tsx — modal redesenhado:
+
+Seletor de data com min=hoje (bloqueia passado)
+Seletor de instalador (lista carregada da API)
+Grid de horários disponíveis/ocupados (clicável), com slots marcados em vermelho/riscados quando ocupados
+Mensagem de erro do backend exibida diretamente no toast
+Settings.tsx — 2 novas abas:
+
+Agendamento: configura duração dos blocos, horário de início/fim, dias de trabalho da empresa, e disponibilidade individual por instalador
+Fluxo do Bot: 8 cards expansíveis (um por domínio) com campos para mensagem de boas-vindas, fallback e tom — badge "Customizado" quando sobrescrito, botão "Restaurar padrão"
