@@ -263,6 +263,9 @@ def handle_global_step(
         }:
             ctx["global_intent"] = "quote"
             ctx["global_menu_done"] = True
+            conversation.bot_context = json_safe(ctx)
+            flag_modified(conversation, "bot_context")
+            conversation.bot_step = "start"
             if domain_caller:
                 return domain_caller()
             return reply_text(conversation, db,
@@ -327,6 +330,7 @@ def handle_global_step(
         db.flush()
         return {
             "action": "assumed",
+            "next_step": "global_tech_visit_waiting",
             "text": (
                 "Obrigado! Recebi o motivo da visita técnica. 📋\n\n"
                 "Nossa equipe vai avaliar e entrar em contato para confirmar o agendamento. "
