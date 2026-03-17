@@ -13,6 +13,8 @@ import Quotes from './pages/Quotes'
 import Settings from './pages/Settings'
 import Measures from './pages/Measures'
 import Schedule from './pages/Schedule'
+import Financial from './pages/Financial'
+import CRM from './pages/CRM'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminCompanies from './pages/admin/AdminCompanies'
 import AdminUsers from './pages/admin/AdminUsers'
@@ -66,6 +68,8 @@ export default function App() {
               <Route path="/quotes" element={<Quotes />} />
               <Route path="/measures" element={<Measures />} />
               <Route path="/schedule" element={<Schedule />} />
+              <Route path="/financial" element={<Financial />} />
+              <Route path="/crm" element={<CRM />} />
               {/* Rotas exclusivas para company_admin */}
               <Route element={<PrivateRoute allowedRoles={['company_admin']} />}>
                 <Route path="/settings" element={<Settings />} />

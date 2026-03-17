@@ -1,0 +1,213 @@
+Quero evoluir o frontend do AlphaSync para um visual mais técnico/comercial, com aparência de plataforma white-label de atendimento, sem perder o que já existe.
+
+Referência:
+quero uma linha visual parecida com plataformas white-label de atendimento via WhatsApp/CRM:
+- visual mais profissional
+- mais técnico
+- mais comercial
+- mais cara de produto SaaS
+- mantendo o painel atual como base
+
+Importante:
+- não refatorar o projeto inteiro do zero
+- preservar a arquitetura atual
+- preservar as rotas e funcionalidades já prontas
+- melhorar o frontend incrementalmente
+- focar no painel da empresa e do vendedor
+- não preciso da aba “Apps”
+- manter o que já existe e adicionar apenas o necessário
+
+==================================================
+OBJETIVO VISUAL
+==================================================
+
+Quero um frontend mais forte, moderno e técnico para:
+- COMPANY_ADMIN
+- SELLER
+
+Direção visual:
+- estilo SaaS white-label
+- clean e profissional
+- mais técnico/comercial
+- forte sensação de CRM + central de atendimento
+- bom uso de cards, métricas, tabelas e pipeline
+- layout consistente e escalável
+
+Quero melhorar especialmente:
+- Dashboard
+- Conversas
+- Clientes
+- Orçamentos
+- CRM
+- Relatórios Financeiros
+
+==================================================
+PARTE 1 — NOVO PADRÃO VISUAL
+==================================================
+
+Quero revisar e melhorar o visual do painel da empresa e vendedor.
+
+Melhorias desejadas:
+- sidebar mais premium
+- topbar mais forte
+- cards de métricas mais bonitos
+- tabelas com visual mais profissional
+- melhor hierarquia visual
+- melhor espaçamento
+- melhor contraste
+- mais aparência de software comercial
+
+Use o frontend atual como base, sem quebrar o que já funciona.
+
+==================================================
+PARTE 2 — RELATÓRIO FINANCEIRO
+==================================================
+
+Criar uma nova área de Relatório Financeiro.
+
+Pode ser:
+- nova página /financial
+ou
+- nova aba dentro do dashboard/relatórios
+
+Quero indicadores como:
+- total fechado no período
+- total em aberto
+- ticket médio
+- conversão de orçamento em fechamento
+- receita por vendedor
+- receita por status
+- receita por período (dia, semana, mês)
+- agendados, concluídos e cancelados
+- comparação simples entre períodos
+
+Se faltar endpoint, criar o mínimo necessário no backend.
+
+Frontend:
+- cards executivos
+- gráficos
+- tabelas resumidas
+- filtros por período
+- visual bonito e claro
+
+==================================================
+PARTE 3 — CRM MAIS DETALHADO
+==================================================
+
+Quero melhorar a parte de CRM.
+
+Pode ser uma nova página /crm ou evolução forte de clientes/conversas.
+
+Quero que cada lead tenha:
+- nome
+- telefone
+- origem do lead
+- status do funil
+- vendedor responsável
+- valor potencial
+- última interação
+- próxima ação
+- orçamento vinculado, se existir
+- agendamento vinculado, se existir
+
+Quero também uma visualização de pipeline/funil, por exemplo:
+- Novo lead
+- Em atendimento
+- Orçamento enviado
+- Em negociação
+- Fechado
+- Perdido
+
+Se faltar backend, criar apenas o necessário.
+Se já houver base, reaproveitar.
+
+Frontend:
+- cards ou colunas de pipeline
+- filtros
+- detalhe do lead em drawer/modal
+- visual premium e comercial
+
+==================================================
+PARTE 4 — TEMA CLARO / ESCURO PERSISTENTE
+==================================================
+
+Quero adicionar alternância de tema:
+- claro
+- escuro
+
+Regras:
+- cada usuário escolhe o tema
+- a escolha deve ser salva permanentemente
+- ao fazer login novamente, o tema deve voltar como estava
+- isso deve funcionar para qualquer usuário:
+  - master_admin
+  - company_admin
+  - seller
+  - installer
+
+Se possível:
+- salvar a preferência no backend por usuário
+- se não houver estrutura pronta, usar o melhor caminho escalável
+
+Adicionar:
+- botão/toggle de tema na interface
+- persistência confiável
+
+==================================================
+PARTE 5 — MANTER O QUE JÁ EXISTE
+==================================================
+
+Não criar aba de Apps.
+Não remover funcionalidades prontas.
+Apenas:
+- melhorar o visual
+- adicionar Relatório Financeiro
+- adicionar CRM mais detalhado
+- adicionar tema claro/escuro persistente
+
+==================================================
+PARTE 6 — PONTOS-CHAVE A RESOLVER
+==================================================
+
+Quero que você também resolva os pontos-chave finais do frontend antes do deploy:
+
+1. alinhar visual do painel empresa/vendedor ao nível premium de /admin/domains
+2. garantir consistência visual entre dashboard, conversas, clientes, orçamentos, agenda e configurações
+3. deixar a navegação mais profissional e coesa
+4. manter performance e não quebrar responsividade
+5. se houver qualquer fragilidade visual importante, corrigir
+
+==================================================
+PARTE 7 — ENTREGA
+==================================================
+
+Quero que você faça em etapas:
+
+ETAPA 1
+- analisar o frontend atual da empresa/vendedor
+- propor rapidamente a nova estrutura visual
+
+ETAPA 2
+- implementar o novo padrão visual
+
+ETAPA 3
+- implementar Relatório Financeiro
+
+ETAPA 4
+- implementar CRM mais detalhado
+
+ETAPA 5
+- implementar tema claro/escuro persistente
+
+ETAPA 6
+- validar funcionalmente
+- mostrar:
+  - arquivos alterados
+  - rotas criadas
+  - endpoints criados/alterados
+  - como ficou a persistência do tema
+
+Importante:
+- preservar a arquitetura
+- melhorar incrementalmente
+- manter tudo pronto para deploy

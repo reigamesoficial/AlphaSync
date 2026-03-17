@@ -2,6 +2,53 @@
 
 Multi-tenant SaaS platform for service businesses with WhatsApp chatbot integration. Includes a FastAPI backend and a React frontend panel.
 
+## Frontend Evolution (2026-03-17) — Premium Redesign + New Pages
+
+### Theme System
+- **`frontend/src/context/ThemeContext.tsx`** (NEW): `ThemeProvider` + `useTheme()` hook with localStorage persistence
+- `main.tsx` wrapped with `ThemeProvider`
+- **`frontend/src/index.css`**: CSS `[data-theme="light"]` overrides for all surface, border, text, input, card, and button classes
+- **`frontend/tailwind.config.js`**: darkMode updated to `['class', '[data-theme="dark"]']` for attribute-based switching
+
+### Layout Revamp
+- **`frontend/src/components/layout/Sidebar.tsx`**: Full redesign
+  - Sectioned navigation (Operacional / Análise / Campo / Gestão)
+  - Active state with brand-colored border + dot indicator
+  - Theme toggle (animated pill switch) with Sun/Moon icon
+  - User avatar with role-colored status dot + logout button (LogOut icon)
+  - New nav items: Financeiro (BarChart3) and CRM / Funil (GitBranch)
+- **`frontend/src/components/layout/Topbar.tsx`**: Premium redesign
+  - Optional `breadcrumb` prop for hierarchical context
+  - Optional `action` prop for page-level action buttons
+  - Notification bell with indicator dot
+  - User avatar chip (no duplicate logout — now in Sidebar)
+
+### New Pages
+- **`frontend/src/pages/Financial.tsx`** (NEW): `/financial` route
+  - 4 KPI cards: Receita Total, Orçamentos Confirmados, Clientes Ativos, Taxa de Conversão
+  - Area chart: Receita Mensal (recharts, last 6 or 12 months toggle)
+  - Bar chart: Orçamentos / Mês
+  - Top Clients table with proportional progress bars
+  - Loads from `GET /api/v1/dashboard/financial?months=6`
+- **`frontend/src/pages/CRM.tsx`** (NEW): `/crm` route
+  - Kanban board with 6 pipeline stages: Lead → Contactado → Visita Agendada → Orçamento Enviado → Ganho → Perdido
+  - Stage summary bar with live counts and conversion rate
+  - Client cards with avatar, phone, role/seller attribution
+  - Search filter, refresh button
+  - Stage mapped from client `status` field
+  - Quick action links at bottom
+
+### Backend — Financial Endpoint
+- **`app/api/v1/endpoints/dashboard.py`**: Added `GET /dashboard/financial`
+  - `months` query param (1–24, default 6)
+  - Revenue (CONFIRMED + DONE quotes), monthly breakdown, top clients
+  - Conversion rate: (confirmed + done) / total quotes × 100
+  - All queries scoped per `company_id` (multi-tenant safe)
+  - Date math with pure Python (no external libs)
+
+### Packages
+- `recharts` added to frontend dependencies
+
 ## Recent Features (2026-03-17) — Global Menu Layer
 
 ### Global Bot Menu + Full Flow Layer (all 8 domains)
