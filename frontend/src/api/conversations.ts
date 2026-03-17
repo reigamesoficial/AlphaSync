@@ -23,3 +23,42 @@ export async function listConversationMessages(id: number): Promise<Conversation
   const { data } = await api.get<ConversationMessage[]>(`/conversations/${id}/messages`)
   return data
 }
+
+export interface GenerateQuoteItemM2 {
+  description: string
+  width_m: number
+  height_m: number
+  quantity: number
+}
+
+export interface GenerateQuoteRequestM2 {
+  mode: 'm2'
+  items: GenerateQuoteItemM2[]
+  color?: string
+  mesh?: string
+  notes?: string
+}
+
+export interface GenerateQuoteRequestManual {
+  mode: 'manual'
+  description: string
+  value: number
+  notes?: string
+}
+
+export interface GenerateQuoteResponse {
+  quote_id: number
+  total_value: number
+  items_count: number
+}
+
+export async function generateQuote(
+  conversationId: number,
+  body: GenerateQuoteRequestM2 | GenerateQuoteRequestManual,
+): Promise<GenerateQuoteResponse> {
+  const { data } = await api.post<GenerateQuoteResponse>(
+    `/conversations/${conversationId}/generate-quote`,
+    body,
+  )
+  return data
+}

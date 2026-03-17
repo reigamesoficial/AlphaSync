@@ -28,6 +28,9 @@ NO_WORDS = {"nao", "não", "n", "no"}
 ALTER_WORDS = {"alterar", "mudar", "editar"}
 CONFIRM_WORDS = {"confirmar", "fechar", "seguir", "continuar"}
 
+SCHEDULE_YES_WORDS = {"sim", "s", "yes", "y", "1", "schedule_yes", "agendar", "quero"}
+SCHEDULE_LATER_WORDS = {"nao", "não", "n", "no", "2", "schedule_later", "depois", "prefiro", "agora não", "agora nao"}
+
 
 def _domain_settings(company) -> dict[str, Any]:
     base = domain.get_default_settings()
@@ -418,6 +421,79 @@ def _build_quote_confirmation_text(*, client_name: str | None, address: str, sel
         f"2) Alterar dados"
     )
     return base
+
+
+def _get_schedule_cfg(company, db) -> dict[str, Any]:
+    from sqlalchemy import select as _select
+    from app.db.models import CompanySettings as _CS
+    cs = db.scalar(_select(_CS).where(_CS.company_id == company.id))
+    extra = (cs.extra_settings or {}) if cs else {}
+    cfg = extra.get("schedule") or {}
+    return {
+        "slot_minutes": int(cfg.get("slot_minutes", 120)),
+        "workday_start": cfg.get("workday_start", "08:00"),
+        "workday_end": cfg.get("workday_end", "18:00"),
+        "allowed_weekdays": list(cfg.get("allowed_weekdays", [0, 1, 2, 3, 4])),
+    }
+
+
+def _parse_date_br(text: str):
+    from datetime import date as _date, datetime as _dt
+    text = text.strip()
+    for sep in ["/", "-", "."]:
+        text = text.replace(sep, "/")
+    parts = text.split("/")
+    try:
+        if len(parts) == 3:
+            day, month = int(parts[0]), int(parts[1])
+            year = int(parts[2]) if len(parts[2]) == 4 else 2000 + int(parts[2])
+            return _date(year, month, day)
+        if len(parts) == 2:
+            day, month = int(parts[0]), int(parts[1])
+            today = _dt.today().date()
+            year = today.year
+            try:
+                d = _date(year, month, day)
+                if d < today:
+                    d = _date(year + 1, month, day)
+                return d
+            except ValueError:
+                return None
+    except (ValueError, IndexError):
+        return None
+    return None
+
+
+def _compute_slots(target_date, cfg: dict[str, Any]) -> list[dict[str, Any]]:
+    from datetime import datetime as _dt, timedelta as _td
+    weekday = target_date.weekday()
+    allowed = list(cfg.get("allowed_weekdays", [0, 1, 2, 3, 4]))
+    if weekday not in allowed:
+        return []
+    start_h, start_m = map(int, cfg.get("workday_start", "08:00").split(":"))
+    end_h, end_m = map(int, cfg.get("workday_end", "18:00").split(":"))
+    slot_minutes = int(cfg.get("slot_minutes", 120))
+    day_start = _dt(target_date.year, target_date.month, target_date.day, start_h, start_m)
+    day_end = _dt(target_date.year, target_date.month, target_date.day, end_h, end_m)
+    slots = []
+    current = day_start
+    while current + _td(minutes=slot_minutes) <= day_end:
+        slot_end = current + _td(minutes=slot_minutes)
+        slots.append({
+            "id": f"slot_{current.strftime('%H%M')}",
+            "label": f"{current.strftime('%H:%M')} – {slot_end.strftime('%H:%M')}",
+            "start_dt": current.isoformat(),
+            "end_dt": slot_end.isoformat(),
+        })
+        current = slot_end
+    return slots
+
+
+def _format_date_pt(d) -> str:
+    WEEKDAYS_PT = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira",
+                   "sexta-feira", "sábado", "domingo"]
+    day_name = WEEKDAYS_PT[d.weekday()]
+    return f"{d.day:02d}/{d.month:02d}/{d.year} ({day_name})"
 
 
 def handle_inbound_message(*, company, conversation, client, inbound_message, db):
@@ -1043,12 +1119,16 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
                 preview = {"items": quote_items, "totals": totals}
                 context["quote_preview"] = preview
 
-            return _reply_text(
+            return _reply_buttons(
                 conversation,
                 db,
-                text="Perfeito. Seu orçamento foi confirmado e vou seguir com o próximo passo do atendimento.",
-                next_step="quote_ready",
+                text="Ótimo! Seu orçamento está confirmado.\n\nDeseja agendar a instalação agora?",
+                next_step="schedule_ask",
                 context=context,
+                buttons=[
+                    {"id": "schedule_yes", "title": "Sim, agendar agora"},
+                    {"id": "schedule_later", "title": "Prefiro depois"},
+                ],
                 extra={
                     "rule_result": rule_result.to_dict(),
                     "quote_preview": preview,
@@ -1156,6 +1236,172 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
             next_step="quote_edit_choice",
             context=context,
             buttons=edit_buttons,
+        )
+
+    if current_step == "quote_ready":
+        return _reply_buttons(
+            conversation,
+            db,
+            text="Seu orçamento foi confirmado! Deseja agendar a instalação?",
+            next_step="schedule_ask",
+            context=context,
+            buttons=[
+                {"id": "schedule_yes", "title": "Sim, agendar agora"},
+                {"id": "schedule_later", "title": "Prefiro depois"},
+            ],
+        )
+
+    if current_step == "schedule_ask":
+        if normalized in SCHEDULE_LATER_WORDS:
+            return _reply_text(
+                conversation,
+                db,
+                text="Sem problema! Quando quiser agendar, pode entrar em contato conosco. Até mais!",
+                next_step="done",
+                context=context,
+            )
+        return _reply_text(
+            conversation,
+            db,
+            text="Ótimo! Em qual data prefere a instalação?\nMe envie no formato *DD/MM* (ex: 25/01).",
+            next_step="schedule_date",
+            context=context,
+        )
+
+    if current_step == "schedule_date":
+        from datetime import datetime as _now_dt
+        parsed = _parse_date_br(text)
+        today = _now_dt.today().date()
+        if parsed is None:
+            return _reply_text(
+                conversation,
+                db,
+                text="Não entendi a data. Por favor, envie no formato *DD/MM* (ex: 25/01).",
+                next_step="schedule_date",
+                context=context,
+            )
+        if parsed < today:
+            return _reply_text(
+                conversation,
+                db,
+                text="Essa data já passou. Por favor, escolha uma data futura no formato *DD/MM*.",
+                next_step="schedule_date",
+                context=context,
+            )
+        cfg = _get_schedule_cfg(company, db)
+        slots = _compute_slots(parsed, cfg)
+        if not slots:
+            return _reply_text(
+                conversation,
+                db,
+                text=f"Não há horários disponíveis em *{_format_date_pt(parsed)}*.\nTente outra data no formato *DD/MM*.",
+                next_step="schedule_date",
+                context=context,
+            )
+        context["schedule_date"] = parsed.isoformat()
+        context["schedule_slots"] = slots
+        rows = [{"id": s["id"], "title": s["label"], "description": ""} for s in slots[:10]]
+        return _reply_list(
+            conversation,
+            db,
+            header="Horários disponíveis",
+            body=f"Escolha um horário para *{_format_date_pt(parsed)}*:",
+            button_text="Ver horários",
+            sections=[{"title": "Horários", "rows": rows}],
+            next_step="schedule_slot",
+            context=context,
+        )
+
+    if current_step == "schedule_slot":
+        slots: list = context.get("schedule_slots") or []
+        date_str: str = context.get("schedule_date") or ""
+        chosen = next((s for s in slots if s["id"] == normalized or s["label"] == text.strip()), None)
+        if chosen is None:
+            for s in slots:
+                if normalized in s["id"] or normalized in s["label"].lower():
+                    chosen = s
+                    break
+        if chosen is None and len(slots) == 1:
+            chosen = slots[0]
+        if chosen is None:
+            rows = [{"id": s["id"], "title": s["label"], "description": ""} for s in slots[:10]]
+            return _reply_list(
+                conversation,
+                db,
+                header="Escolha um horário",
+                body="Por favor, selecione um dos horários abaixo:",
+                button_text="Ver horários",
+                sections=[{"title": "Horários", "rows": rows}],
+                next_step="schedule_slot",
+                context=context,
+            )
+        from datetime import datetime as _dt
+        from decimal import Decimal as _Decimal
+        from app.repositories.appointments import AppointmentsRepository as _AR
+        start_at = _dt.fromisoformat(chosen["start_dt"])
+        end_at = _dt.fromisoformat(chosen["end_dt"])
+        address_raw = context.get("address_raw") or context.get("address") or ""
+        quote_id: int | None = None
+        preview = context.get("quote_preview") or {}
+        totals = preview.get("totals") or {}
+        total_value = None
+        if totals and totals.get("total_value"):
+            try:
+                total_value = _Decimal(str(totals["total_value"]))
+            except Exception:
+                total_value = None
+        if not quote_id:
+            from sqlalchemy import select as _sel
+            from app.db.models import Quote as _Q
+            q = db.scalar(
+                _sel(_Q)
+                .where(_Q.company_id == company.id, _Q.client_id == client.id)
+                .order_by(_Q.created_at.desc())
+            )
+            if q:
+                quote_id = q.id
+        repo = _AR(db)
+        repo.create_appointment(
+            company_id=company.id,
+            client_id=client.id,
+            quote_id=quote_id,
+            address_raw=address_raw,
+            start_at=start_at,
+            end_at=end_at,
+            service_type="protection_network",
+            event_title=f"Instalação – {client.name or 'Cliente'}",
+            valor=total_value,
+            notes="Agendado pelo chatbot WhatsApp.",
+        )
+        db.commit()
+        from datetime import datetime as _fmt_dt
+        date_label = ""
+        if date_str:
+            from datetime import date as _d
+            try:
+                date_label = _format_date_pt(_d.fromisoformat(date_str))
+            except Exception:
+                date_label = date_str
+        return _reply_text(
+            conversation,
+            db,
+            text=(
+                f"Agendamento confirmado! ✅\n\n"
+                f"📅 *{date_label}*\n"
+                f"🕐 *{chosen['label']}*\n\n"
+                "Nossa equipe entrará em contato para confirmar. Até lá!"
+            ),
+            next_step="schedule_confirmed",
+            context=context,
+        )
+
+    if current_step == "schedule_confirmed":
+        return _reply_text(
+            conversation,
+            db,
+            text="Seu agendamento já está registrado. Em caso de dúvidas, fale com nossa equipe. 😊",
+            next_step="schedule_confirmed",
+            context=context,
         )
 
     return _reply_text(

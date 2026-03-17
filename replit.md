@@ -4,6 +4,28 @@ Multi-tenant SaaS platform for service businesses with WhatsApp chatbot integrat
 
 ## Recent Features (2026-03-17)
 
+### 3 Operational Fronts — VPS Pre-Deploy
+**Frente 1 — Bot: Agendamento após confirmação de orçamento**
+- Chatbot flow (`chatbot_flow.py`) extended with scheduling steps after quote confirmation
+- New steps: `schedule_ask` → `schedule_date` → `schedule_slot` → `schedule_confirmed`
+- `_get_schedule_cfg()`: reads slot config from company settings
+- `_compute_slots()`: generates available time slots for a given date
+- `_parse_date_br()`: parses DD/MM and DD/MM/YYYY date formats
+- `_format_date_pt()`: formats date in Portuguese (e.g., "18/03/2026 (quarta-feira)")
+- Creates `Appointment` in DB (linked to quote, client, address) via `AppointmentsRepository`
+
+**Frente 2 — Botão "Gerar Orçamento" no painel do vendedor**
+- Backend: `POST /conversations/{id}/generate-quote` with 2 modes:
+  - Mode `m2`: items with description/width/height/qty + color + mesh → uses pricing rules
+  - Mode `manual`: description + fixed value → direct quote creation
+- Backend: `GET /company/profile` — returns `service_domain` + basic company info
+- Frontend: `QuoteModal` component with 2 tabs ("Calcular m²" / "Valor fixo")
+- Frontend: "Gerar Orçamento" button in `ChatDrawer` footer — visible **only** for `protection_network` companies
+- Toast notification shows quote ID and total value on success
+- `service_domain` loaded at `Conversations` page mount via `getCompanyProfile()`
+
+**Frente 3 — Horários de serviço** ✅ Already complete (Settings tab "Agendamento")
+
 ### Scheduling Business Rules
 - **Past-date blocking**: `POST/PATCH /appointments` now rejects dates in the past (422 error)
 - **Installer conflict detection**: Detects overlapping active appointments for the same installer (409 error)

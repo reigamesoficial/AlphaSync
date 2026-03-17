@@ -2,13 +2,15 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import {
   MessageSquare, Search, ChevronLeft, ChevronRight, Clock,
   X, Download, FileText, Image as ImageIcon, Video, File,
-  ExternalLink, Send, Bot, User as UserIcon,
+  ExternalLink, Send, Bot, User as UserIcon, Plus, Calculator, Trash2,
 } from 'lucide-react'
 import Topbar from '../components/layout/Topbar'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import { PageSpinner } from '../components/ui/Spinner'
-import { listConversations, listConversationMessages, getConversation } from '../api/conversations'
+import { listConversations, listConversationMessages, getConversation, generateQuote } from '../api/conversations'
+import type { GenerateQuoteItemM2 } from '../api/conversations'
+import { getCompanyProfile } from '../api/company'
 import type { Conversation, ConversationMessage, PaginatedResponse } from '../types'
 
 const STATUSES = ['', 'open', 'bot', 'assumed', 'closed', 'archived']
@@ -193,15 +195,318 @@ function DateSeparator({ date }: { date: string }) {
   )
 }
 
+const MESH_OPTIONS = ['3x3', '5x5', '10x10']
+const COLOR_OPTIONS = ['Preto', 'Branco', 'Grafite', 'Bege', 'Transparente']
+
+function QuoteModal({
+  convId,
+  onClose,
+  onSuccess,
+}: {
+  convId: number
+  onClose: () => void
+  onSuccess: (result: { quote_id: number; total_value: number }) => void
+}) {
+  const [tab, setTab] = useState<'m2' | 'manual'>('m2')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const [items, setItems] = useState<GenerateQuoteItemM2[]>([
+    { description: '', width_m: 0, height_m: 0, quantity: 1 },
+  ])
+  const [mesh, setMesh] = useState('3x3')
+  const [color, setColor] = useState('')
+  const [m2Notes, setM2Notes] = useState('')
+
+  const [manualDesc, setManualDesc] = useState('')
+  const [manualValue, setManualValue] = useState('')
+  const [manualNotes, setManualNotes] = useState('')
+
+  function addItem() {
+    setItems((prev) => [...prev, { description: '', width_m: 0, height_m: 0, quantity: 1 }])
+  }
+  function removeItem(idx: number) {
+    setItems((prev) => prev.filter((_, i) => i !== idx))
+  }
+  function updateItem(idx: number, field: keyof GenerateQuoteItemM2, value: string | number) {
+    setItems((prev) => prev.map((it, i) => i === idx ? { ...it, [field]: value } : it))
+  }
+
+  async function handleSubmit() {
+    setError(null)
+    setSubmitting(true)
+    try {
+      let result
+      if (tab === 'm2') {
+        const validItems = items.filter(
+          (it) => it.description.trim() && it.width_m > 0 && it.height_m > 0,
+        )
+        if (validItems.length === 0) {
+          setError('Adicione pelo menos um item com descrição e medidas válidas.')
+          setSubmitting(false)
+          return
+        }
+        result = await generateQuote(convId, {
+          mode: 'm2',
+          items: validItems.map((it) => ({
+            ...it,
+            width_m: Number(it.width_m),
+            height_m: Number(it.height_m),
+            quantity: Number(it.quantity) || 1,
+          })),
+          mesh,
+          color: color || undefined,
+          notes: m2Notes || undefined,
+        })
+      } else {
+        if (!manualDesc.trim()) {
+          setError('Informe uma descrição para o orçamento.')
+          setSubmitting(false)
+          return
+        }
+        const val = parseFloat(manualValue)
+        if (!manualValue || isNaN(val) || val <= 0) {
+          setError('Informe um valor válido.')
+          setSubmitting(false)
+          return
+        }
+        result = await generateQuote(convId, {
+          mode: 'manual',
+          description: manualDesc.trim(),
+          value: val,
+          notes: manualNotes || undefined,
+        })
+      }
+      onSuccess(result)
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(msg || 'Erro ao gerar orçamento. Tente novamente.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+      <div className="bg-surface-800 border border-surface-600 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
+        {/* Modal header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-surface-600">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+              <Calculator className="w-4 h-4 text-emerald-400" />
+            </div>
+            <h3 className="text-white font-semibold text-base">Gerar Orçamento</h3>
+          </div>
+          <button onClick={onClose} className="btn-ghost p-1.5">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-surface-600 px-5">
+          {(['m2', 'manual'] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`py-3 px-4 text-sm font-medium border-b-2 transition-colors ${
+                tab === t
+                  ? 'border-emerald-500 text-emerald-400'
+                  : 'border-transparent text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              {t === 'm2' ? 'Calcular m²' : 'Valor fixo'}
+            </button>
+          ))}
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          {tab === 'm2' && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="form-label">Malha</label>
+                  <select className="input" value={mesh} onChange={(e) => setMesh(e.target.value)}>
+                    {MESH_OPTIONS.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label">Cor (opcional)</label>
+                  <select className="input" value={color} onChange={(e) => setColor(e.target.value)}>
+                    <option value="">Padrão</option>
+                    {COLOR_OPTIONS.map((c) => (
+                      <option key={c} value={c.toLowerCase()}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="form-label mb-0">Itens / áreas</label>
+                  <button onClick={addItem} className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 transition-colors">
+                    <Plus className="w-3.5 h-3.5" />
+                    Adicionar área
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {items.map((it, idx) => (
+                    <div key={idx} className="bg-surface-700 rounded-xl p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          className="input flex-1"
+                          placeholder="Descrição (ex: Sacada principal)"
+                          value={it.description}
+                          onChange={(e) => updateItem(idx, 'description', e.target.value)}
+                        />
+                        {items.length > 1 && (
+                          <button
+                            onClick={() => removeItem(idx)}
+                            className="btn-ghost p-1.5 text-red-400 hover:text-red-300"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <label className="text-[10px] text-slate-500 mb-1 block">Largura (m)</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            className="input"
+                            placeholder="0.00"
+                            value={it.width_m || ''}
+                            onChange={(e) => updateItem(idx, 'width_m', e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-500 mb-1 block">Altura (m)</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            className="input"
+                            placeholder="0.00"
+                            value={it.height_m || ''}
+                            onChange={(e) => updateItem(idx, 'height_m', e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-500 mb-1 block">Qtd</label>
+                          <input
+                            type="number"
+                            min="1"
+                            className="input"
+                            placeholder="1"
+                            value={it.quantity || ''}
+                            onChange={(e) => updateItem(idx, 'quantity', parseInt(e.target.value) || 1)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="form-label">Observações (opcional)</label>
+                <textarea
+                  className="input min-h-[60px] resize-none"
+                  placeholder="Observações para o orçamento..."
+                  value={m2Notes}
+                  onChange={(e) => setM2Notes(e.target.value)}
+                />
+              </div>
+            </>
+          )}
+
+          {tab === 'manual' && (
+            <>
+              <div>
+                <label className="form-label">Descrição do serviço</label>
+                <textarea
+                  className="input min-h-[80px] resize-none"
+                  placeholder="Ex: Instalação de redes em varanda com medidas especiais..."
+                  value={manualDesc}
+                  onChange={(e) => setManualDesc(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="form-label">Valor total (R$)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  className="input"
+                  placeholder="0,00"
+                  value={manualValue}
+                  onChange={(e) => setManualValue(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="form-label">Observações (opcional)</label>
+                <textarea
+                  className="input min-h-[60px] resize-none"
+                  placeholder="Observações internas..."
+                  value={manualNotes}
+                  onChange={(e) => setManualNotes(e.target.value)}
+                />
+              </div>
+            </>
+          )}
+
+          {error && (
+            <div className="bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl px-4 py-3 text-sm">
+              {error}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-surface-600">
+          <button onClick={onClose} className="btn-ghost" disabled={submitting}>
+            Cancelar
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={submitting}
+            className="btn-primary flex items-center gap-2"
+          >
+            {submitting ? (
+              <>
+                <span className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                Gerando...
+              </>
+            ) : (
+              <>
+                <Calculator className="w-4 h-4" />
+                Gerar Orçamento
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ChatDrawer({
   conv,
   onClose,
+  serviceDomain,
 }: {
   conv: Conversation
   onClose: () => void
+  serviceDomain: string | null
 }) {
   const [messages, setMessages] = useState<ConversationMessage[]>([])
   const [loading, setLoading] = useState(true)
+  const [quoteModalOpen, setQuoteModalOpen] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -215,6 +520,13 @@ function ChatDrawer({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  function handleQuoteSuccess(result: { quote_id: number; total_value: number }) {
+    setQuoteModalOpen(false)
+    const val = result.total_value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+    setToast(`Orçamento #${result.quote_id} criado — Total: ${val}`)
+    setTimeout(() => setToast(null), 5000)
+  }
 
   // Group messages by date
   const groups: { date: string; msgs: ConversationMessage[] }[] = []
@@ -291,7 +603,12 @@ function ChatDrawer({
       </div>
 
       {/* Footer info */}
-      <div className="px-4 py-2.5 border-t border-surface-600 bg-surface-700">
+      <div className="px-4 py-2.5 border-t border-surface-600 bg-surface-700 space-y-2">
+        {toast && (
+          <div className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 backdrop-blur rounded-xl px-3 py-2 text-xs font-medium">
+            {toast}
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <span className="text-slate-600 text-xs flex items-center gap-1">
             <Clock className="w-3 h-3" />
@@ -301,10 +618,29 @@ function ChatDrawer({
             {CHANNEL_LABELS[conv.channel] ?? conv.channel}
           </span>
         </div>
-        <p className="text-slate-700 text-[10px] mt-0.5">
-          {messages.length} mensagem{messages.length !== 1 ? 's' : ''}
-        </p>
+        <div className="flex items-center justify-between">
+          <p className="text-slate-700 text-[10px]">
+            {messages.length} mensagem{messages.length !== 1 ? 's' : ''}
+          </p>
+          {serviceDomain === 'protection_network' && (
+            <button
+              onClick={() => setQuoteModalOpen(true)}
+              className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-emerald-600/20 text-emerald-400 border border-emerald-600/30 hover:bg-emerald-600/30 transition-colors"
+            >
+              <Calculator className="w-3.5 h-3.5" />
+              Gerar Orçamento
+            </button>
+          )}
+        </div>
       </div>
+
+      {quoteModalOpen && (
+        <QuoteModal
+          convId={conv.id}
+          onClose={() => setQuoteModalOpen(false)}
+          onSuccess={handleQuoteSuccess}
+        />
+      )}
     </div>
   )
 }
@@ -316,7 +652,14 @@ export default function Conversations() {
   const [status, setStatus] = useState('')
   const [page, setPage] = useState(1)
   const [selectedConv, setSelectedConv] = useState<Conversation | null>(null)
+  const [serviceDomain, setServiceDomain] = useState<string | null>(null)
   const perPage = 20
+
+  useEffect(() => {
+    getCompanyProfile()
+      .then((p) => setServiceDomain(p.service_domain))
+      .catch(() => setServiceDomain(null))
+  }, [])
 
   const fetchConversations = useCallback(async () => {
     setLoading(true)
@@ -470,7 +813,7 @@ export default function Conversations() {
             className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
             onClick={() => setSelectedConv(null)}
           />
-          <ChatDrawer conv={selectedConv} onClose={() => setSelectedConv(null)} />
+          <ChatDrawer conv={selectedConv} onClose={() => setSelectedConv(null)} serviceDomain={serviceDomain} />
         </>
       )}
     </div>

@@ -15,7 +15,7 @@ from app.core.security import (
 )
 from app.core.tenancy import get_tenant_company_id
 from app.db.connection import get_db
-from app.db.models import CompanySettings, DomainDefinition, User, UserRole
+from app.db.models import Company, CompanySettings, DomainDefinition, User, UserRole
 from app.schemas.company import CompanySettingsResponse, CompanySettingsUpdate
 from app.schemas.measures import PNSettingsResponse, PNSettingsUpdate
 from app.schemas.users import UserResponse
@@ -45,6 +45,38 @@ DOMAIN_DISPLAY_NAMES: dict[str, str] = {
 }
 
 router = APIRouter(prefix="/company", tags=["Company"])
+
+
+class CompanyProfileResponse(BaseModel):
+    id: int
+    slug: str
+    name: str
+    service_domain: str
+    is_active: bool
+    support_email: str | None = None
+    support_phone: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+@router.get("/profile", response_model=CompanyProfileResponse)
+def get_company_profile(
+    current_user: User = Depends(get_current_active_user),
+    tenant_company_id: int = Depends(get_tenant_company_id),
+    db: Session = Depends(get_db),
+) -> CompanyProfileResponse:
+    company = db.scalar(select(Company).where(Company.id == tenant_company_id))
+    if not company:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Empresa não encontrada.")
+    return CompanyProfileResponse(
+        id=company.id,
+        slug=company.slug,
+        name=company.name,
+        service_domain=company.service_domain.value if hasattr(company.service_domain, "value") else str(company.service_domain),
+        is_active=company.is_active,
+        support_email=company.support_email,
+        support_phone=company.support_phone,
+    )
 
 
 # ── schemas inline para gestão de usuários da empresa ──────────────────────

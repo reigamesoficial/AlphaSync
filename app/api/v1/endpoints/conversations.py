@@ -1,18 +1,59 @@
 from __future__ import annotations
 
+from decimal import Decimal
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import get_current_active_user
 from app.core.tenancy import get_tenant_company_id
 from app.db.connection import get_db
-from app.db.models import ConversationMessage, ConversationStatus, User, UserRole
+from app.db.models import (
+    Company,
+    ConversationMessage,
+    ConversationStatus,
+    Quote,
+    QuoteItem,
+    QuoteStatus,
+    User,
+    UserRole,
+)
 from app.repositories.conversations import ConversationsRepository
 from app.schemas.common import PaginatedResponse
 from app.schemas.conversation import ConversationMessageResponse, ConversationResponse
 
 router = APIRouter(prefix="/conversations", tags=["Conversations"])
+
+
+class GenerateQuoteItemM2(BaseModel):
+    description: str = Field(min_length=1, max_length=200)
+    width_m: float = Field(gt=0)
+    height_m: float = Field(gt=0)
+    quantity: int = Field(default=1, ge=1)
+
+
+class GenerateQuoteRequestM2(BaseModel):
+    mode: Literal["m2"]
+    items: list[GenerateQuoteItemM2] = Field(min_length=1)
+    color: str | None = None
+    mesh: str = "3x3"
+    notes: str | None = None
+
+
+class GenerateQuoteRequestManual(BaseModel):
+    mode: Literal["manual"]
+    description: str = Field(min_length=1, max_length=500)
+    value: float = Field(gt=0)
+    notes: str | None = None
+
+
+class GenerateQuoteResponse(BaseModel):
+    quote_id: int
+    total_value: float
+    items_count: int
 
 
 @router.get("", response_model=PaginatedResponse[ConversationResponse])
@@ -103,3 +144,128 @@ def trigger_24h_window_check(
         "stats": stats,
         "message": f"Verificação concluída. {stats.get('nudged', 0)} nudges enviados.",
     }
+
+
+@router.post("/{conversation_id}/generate-quote", response_model=GenerateQuoteResponse, tags=["Conversations"])
+def generate_quote_from_conversation(
+    conversation_id: int,
+    body: GenerateQuoteRequestM2 | GenerateQuoteRequestManual,
+    company_id: int = Depends(get_tenant_company_id),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+) -> GenerateQuoteResponse:
+    if current_user.role not in (UserRole.MASTER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.SELLER):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado.")
+
+    repo = ConversationsRepository(db)
+    conv = repo.get_full_by_id_and_company(conversation_id, company_id)
+    if not conv:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversa não encontrada.")
+
+    company = db.scalar(select(Company).where(Company.id == company_id))
+    if not company:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Empresa não encontrada.")
+
+    from app.domains.protection_network.pricing import (
+        get_effective_price_per_m2,
+        get_effective_settings,
+        normalize_mesh,
+        _money,
+        _to_decimal,
+    )
+
+    if body.mode == "m2":
+        mesh = normalize_mesh(body.mesh)
+        color = body.color
+        price_per_m2 = get_effective_price_per_m2(company=company, mesh_type=mesh, color=color)
+
+        quote_items_data: list[dict] = []
+        subtotal = Decimal("0.00")
+        for it in body.items:
+            width = _to_decimal(it.width_m)
+            height = _to_decimal(it.height_m)
+            area = _money(width * height * it.quantity)
+            total_price = _money(area * price_per_m2)
+            subtotal += total_price
+            quote_items_data.append({
+                "description": it.description,
+                "width_cm": width,
+                "height_cm": height,
+                "quantity": it.quantity,
+                "unit_price": price_per_m2,
+                "total_price": total_price,
+                "service_type": "protection_network",
+                "notes": f"Malha {mesh} | Cor {color or 'padrão'} | Área {area} m²",
+                "domain_data": {
+                    "mesh_type": mesh,
+                    "color": color,
+                    "area_m2": str(area),
+                    "price_per_m2": str(price_per_m2),
+                    "source": "seller_panel",
+                },
+            })
+
+        cfg = get_effective_settings(company)
+        visit_fee = _money(_to_decimal(cfg["visit_fee"]))
+        min_order = _money(_to_decimal(cfg["minimum_order_value"]))
+        total_value = _money(subtotal + visit_fee)
+        if total_value < min_order:
+            total_value = min_order
+
+    else:
+        total_value = _money(Decimal(str(body.value)))
+        subtotal = total_value
+        visit_fee = Decimal("0.00")
+        quote_items_data = [{
+            "description": body.description,
+            "width_cm": None,
+            "height_cm": None,
+            "quantity": 1,
+            "unit_price": total_value,
+            "total_price": total_value,
+            "service_type": "protection_network",
+            "notes": body.notes or "",
+            "domain_data": {"source": "seller_panel", "mode": "manual"},
+        }]
+
+    quote = Quote(
+        company_id=company_id,
+        client_id=conv.client_id,
+        conversation_id=conversation_id,
+        seller_id=current_user.id,
+        service_type="protection_network",
+        title=f"Orçamento – {conv.client.name if conv.client else 'Cliente'}",
+        description=getattr(body, "notes", None),
+        subtotal=subtotal,
+        discount=Decimal("0.00"),
+        total_value=total_value,
+        status=QuoteStatus.DRAFT,
+        notes=getattr(body, "notes", None),
+    )
+    db.add(quote)
+    db.flush()
+
+    for item_data in quote_items_data:
+        qi = QuoteItem(
+            quote_id=quote.id,
+            company_id=company_id,
+            description=item_data["description"],
+            service_type=item_data["service_type"],
+            width_cm=item_data["width_cm"],
+            height_cm=item_data["height_cm"],
+            quantity=item_data["quantity"],
+            unit_price=item_data["unit_price"],
+            total_price=item_data["total_price"],
+            notes=item_data["notes"],
+            domain_data=item_data["domain_data"],
+        )
+        db.add(qi)
+
+    db.commit()
+    db.refresh(quote)
+
+    return GenerateQuoteResponse(
+        quote_id=quote.id,
+        total_value=float(total_value),
+        items_count=len(quote_items_data),
+    )

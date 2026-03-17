@@ -90,3 +90,18 @@ export async function getAvailableSlots(date: string, installerId?: number): Pro
   const { data } = await api.get<SlotResponse[]>('/appointments/slots', { params })
   return data
 }
+
+export interface CompanyProfile {
+  id: number
+  slug: string
+  name: string
+  service_domain: string
+  is_active: boolean
+  support_email: string | null
+  support_phone: string | null
+}
+
+export async function getCompanyProfile(): Promise<CompanyProfile> {
+  const { data } = await api.get<CompanyProfile>('/company/profile')
+  return data
+}

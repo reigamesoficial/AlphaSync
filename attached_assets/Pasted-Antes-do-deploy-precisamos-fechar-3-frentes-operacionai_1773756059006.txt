@@ -1,0 +1,133 @@
+Antes do deploy, precisamos fechar 3 frentes operacionais importantes no AlphaSync.
+
+Importante:
+- não refatore o projeto inteiro
+- preserve a arquitetura atual
+- preserve multiempresa
+- preserve roles e permissões
+- faça em etapas pequenas
+- primeiro audite o que já existe, depois implemente o que faltar
+
+==================================================
+FRENTE 1 — BOT: AGENDAMENTO PELO CLIENTE APÓS ORÇAMENTO
+==================================================
+
+Quero verificar e completar, se necessário, o fluxo do bot para permitir que o cliente agende o serviço após receber/confimar o orçamento.
+
+Audite primeiro:
+- se o fluxo atual do chatbot já permite agendamento após quote_ready
+- se o cliente consegue escolher dia e período/horário
+- se esse agendamento já cria appointment real no sistema
+- se respeita os slots disponíveis configurados
+
+Se faltar algo, implemente o fluxo correto.
+
+Fluxo esperado:
+1. cliente recebe orçamento
+2. cliente confirma
+3. bot pergunta a data desejada
+4. bot oferece horários/períodos disponíveis
+5. cliente escolhe
+6. sistema cria agendamento
+7. bot confirma o agendamento
+
+Regras:
+- não permitir datas passadas
+- respeitar slots configurados da empresa
+- respeitar disponibilidade do instalador, se aplicável
+- respeitar regras do domínio
+- mensagens claras e humanizadas
+
+==================================================
+FRENTE 2 — CONVERSA DO VENDEDOR: BOTÃO "GERAR ORÇAMENTO"
+==================================================
+
+No painel de conversas do vendedor/admin da empresa, para o domínio protection_network, quero um botão funcional de "Gerar orçamento".
+
+Esse botão deve existir dentro da conversa com o cliente.
+
+Regra:
+essa funcionalidade é exclusiva do domínio protection_network.
+
+Ao clicar, abrir interface/modal/drawer com 2 modos:
+
+MODO A — Calcular M²
+- vendedor adiciona medidas
+- escolhe cor
+- escolhe malha
+- sistema calcula conforme regras da empresa
+- gera quote e quote_items
+
+MODO B — Adicionar valor
+- vendedor informa descrição do serviço
+- informa valor final manual
+- opcionalmente informa medidas e observações
+- sistema gera quote manual sem depender da regra automática
+
+Quero uma UX boa, clara e rápida.
+
+Campos esperados no modo Calcular M²:
+- descrição/área
+- largura
+- altura
+- quantidade
+- cor
+- malha
+- observações
+
+Campos esperados no modo Adicionar valor:
+- descrição
+- valor final
+- observações
+- opcionalmente dimensões
+
+Resultado:
+- gerar quote vinculado à conversa
+- aparecer na conversa e na lista de orçamentos
+- permitir depois gerar PDF normalmente
+
+==================================================
+FRENTE 3 — ADMIN DA EMPRESA: HORÁRIOS DE SERVIÇO
+==================================================
+
+Audite se o painel do company_admin já permite editar corretamente:
+- horário inicial da empresa
+- horário final da empresa
+- duração dos slots
+- dias da semana ativos
+- disponibilidade individual do instalador
+
+Se estiver incompleto ou fraco em UX, melhore.
+
+Quero que o company_admin consiga configurar isso de forma prática no painel.
+
+==================================================
+ENTREGA
+==================================================
+
+Faça em etapas:
+
+ETAPA 1
+- auditar o que já existe nessas 3 frentes
+- me dizer o que já está pronto
+- me dizer o que falta
+
+ETAPA 2
+- completar o fluxo do bot para agendamento após orçamento, se faltar
+
+ETAPA 3
+- implementar o botão/manual flow de gerar orçamento na conversa do vendedor para protection_network
+
+ETAPA 4
+- revisar e completar a tela/configuração de horários de serviço no painel do admin da empresa
+
+ETAPA 5
+- validar tudo funcionalmente
+- mostrar arquivos alterados
+- mostrar endpoints criados/alterados
+- explicar como cada fluxo ficou
+
+Importante:
+- não quebrar o protection_network atual
+- não mexer desnecessariamente em outros domínios
+- manter a feature de orçamento manual apenas para protection_network
