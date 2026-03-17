@@ -222,3 +222,38 @@ class WhatsAppService:
             button_text=button_text,
             sections=sections,
         )
+
+    def send_template_message(
+        self,
+        *,
+        access_token: str,
+        phone_number_id: str,
+        to: str,
+        template_name: str,
+        language_code: str = "pt_BR",
+        components: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        """
+        Send an approved HSM template message.
+        Used for outbound messages outside the 24h customer-service window.
+        """
+        import httpx
+        url = f"https://graph.facebook.com/v19.0/{phone_number_id}/messages"
+        payload: dict[str, Any] = {
+            "messaging_product": "whatsapp",
+            "to": to,
+            "type": "template",
+            "template": {
+                "name": template_name,
+                "language": {"code": language_code},
+            },
+        }
+        if components:
+            payload["template"]["components"] = components
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        }
+        response = httpx.post(url, json=payload, headers=headers, timeout=15)
+        response.raise_for_status()
+        return response.json()

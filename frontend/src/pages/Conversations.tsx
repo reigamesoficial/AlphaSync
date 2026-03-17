@@ -8,7 +8,7 @@ import Topbar from '../components/layout/Topbar'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import { PageSpinner } from '../components/ui/Spinner'
-import { listConversations, listConversationMessages, getConversation, generateQuote, returnToBot } from '../api/conversations'
+import { listConversations, listConversationMessages, getConversation, generateQuote, returnToBot, techVisitConfirm, techVisitToQuote } from '../api/conversations'
 import type { GenerateQuoteItemM2 } from '../api/conversations'
 import { getCompanyProfile } from '../api/company'
 import type { Conversation, ConversationMessage, PaginatedResponse } from '../types'
@@ -549,6 +549,7 @@ function ChatDrawer({
   const [quoteModalOpen, setQuoteModalOpen] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [returningToBot, setReturningToBot] = useState(false)
+  const [techVisitAction, setTechVisitAction] = useState<'confirming' | 'toQuote' | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -581,6 +582,34 @@ function ChatDrawer({
       setTimeout(() => setToast(null), 4000)
     } finally {
       setReturningToBot(false)
+    }
+  }
+
+  async function handleTechVisitConfirm() {
+    setTechVisitAction('confirming')
+    try {
+      const res = await techVisitConfirm(conv.id)
+      setToast(res.message)
+      setTimeout(() => setToast(null), 5000)
+    } catch {
+      setToast('Erro ao confirmar visita técnica. Tente novamente.')
+      setTimeout(() => setToast(null), 4000)
+    } finally {
+      setTechVisitAction(null)
+    }
+  }
+
+  async function handleTechVisitToQuote() {
+    setTechVisitAction('toQuote')
+    try {
+      const res = await techVisitToQuote(conv.id)
+      setToast(res.message)
+      setTimeout(() => setToast(null), 5000)
+    } catch {
+      setToast('Erro ao retomar orçamento. Tente novamente.')
+      setTimeout(() => setToast(null), 4000)
+    } finally {
+      setTechVisitAction(null)
     }
   }
 
@@ -678,8 +707,30 @@ function ChatDrawer({
           <p className="text-slate-700 text-[10px]">
             {messages.length} mensagem{messages.length !== 1 ? 's' : ''}
           </p>
-          <div className="flex items-center gap-2">
-            {conv.status === 'assumed' && serviceDomain === 'protection_network' && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {conv.bot_step === 'global_tech_visit_waiting' && (
+              <>
+                <button
+                  onClick={handleTechVisitConfirm}
+                  disabled={techVisitAction !== null}
+                  className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-600/30 hover:bg-blue-600/30 transition-colors disabled:opacity-50"
+                  title="Enviar lista de datas ao cliente para agendar visita técnica"
+                >
+                  <Bot className="w-3.5 h-3.5" />
+                  {techVisitAction === 'confirming' ? 'Enviando...' : 'Precisa de visita'}
+                </button>
+                <button
+                  onClick={handleTechVisitToQuote}
+                  disabled={techVisitAction !== null}
+                  className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-emerald-600/20 text-emerald-400 border border-emerald-600/30 hover:bg-emerald-600/30 transition-colors disabled:opacity-50"
+                  title="Retomar o fluxo de orçamento normal"
+                >
+                  <Calculator className="w-3.5 h-3.5" />
+                  {techVisitAction === 'toQuote' ? 'Enviando...' : 'Seguir orçamento'}
+                </button>
+              </>
+            )}
+            {conv.status === 'assumed' && conv.bot_step !== 'global_tech_visit_waiting' && serviceDomain === 'protection_network' && (
               <button
                 onClick={handleReturnToBot}
                 disabled={returningToBot}

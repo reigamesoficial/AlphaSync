@@ -76,3 +76,17 @@ export async function returnToBot(conversationId: number): Promise<ReturnToBotRe
   )
   return data
 }
+
+export async function techVisitConfirm(conversationId: number): Promise<ReturnToBotResponse> {
+  const { data } = await api.post<ReturnToBotResponse>(
+    `/conversations/${conversationId}/tech-visit-confirm`,
+  )
+  return data
+}
+
+export async function techVisitToQuote(conversationId: number): Promise<ReturnToBotResponse> {
+  const { data } = await api.post<ReturnToBotResponse>(
+    `/conversations/${conversationId}/tech-visit-to-quote`,
+  )
+  return data
+}

@@ -2,9 +2,57 @@
 
 Multi-tenant SaaS platform for service businesses with WhatsApp chatbot integration. Includes a FastAPI backend and a React frontend panel.
 
-## Recent Features (2026-03-17)
+## Recent Features (2026-03-17) — Global Menu Layer
 
-### 3 Operational Fronts — VPS Pre-Deploy
+### Global Bot Menu + Full Flow Layer (all 8 domains)
+- **`app/domains/_shared/global_menu.py`** (NEW): Global menu intercepted before any domain flow
+  - 5-option list message: Solicitar orçamento / Agendar visita técnica / Tenho orçamento / Reagendar serviço / Cancelar agendamento
+  - Step handlers: `global_main_menu`, `global_tech_visit_*`, `global_has_quote_*`, `global_reschedule_*`, `global_cancel_*`, `global_done`
+  - Schedule utilities: `_get_schedule_cfg()`, `_compute_slots()`, `_compute_available_days()` (shared, independent of domain)
+  - Creates `Appointment` rows for: tech visit scheduling, "has quote" scheduling, and reschedule
+  - Cancels existing appointment on reschedule/cancel flows
+
+- **`app/services/conversation_service.py`** MODIFIED:
+  - `_execute_domain_flow()` now injects global menu layer BEFORE calling domain flow
+  - Global reset: any word in `RESET_WORDS` clears `global_menu_done` flag and shows menu again
+  - `_call_domain_chatbot()` extracted as standalone helper (called by both layer and domain_caller callback)
+  - `_send_domain_response()` now handles `action == "assumed"` — sends text to client via WhatsApp before pausing bot
+
+- **`app/domains/protection_network/chatbot_flow.py`** MODIFIED (Etapa 4):
+  - When address not found in catalog: instead of immediately ASSUMED, asks "Você já tem as medidas?"
+  - New step `ask_has_measures`: Sim → `manual_measurements` + disclaimer warning | Não → ASSUMED/human handoff
+
+- **`app/db/models.py`** MODIFIED:
+  - `ReminderStatus` enum: added `SKIPPED = "skipped"` and `FAILED = "failed"` (were missing, caused `AttributeError`)
+
+- **`app/services/reminder_service.py`** FIXED (3 bugs):
+  1. `update_appointment(appointment.id, ...)` → `update_appointment(appointment, ...)` (was passing int, not object)
+  2. `company_id=` keyword arg removed (doesn't exist in signature)
+  3. `ReminderStatus.SKIPPED/FAILED` were undefined — now fixed by models.py change
+  4. Added `_send_reminder_message()` with template fallback for closed 24h Meta window
+
+- **`app/services/whatsapp_service.py`** MODIFIED:
+  - Added `send_template_message()` for HSM templates (used for outbound reminders outside 24h window)
+
+- **`app/api/v1/endpoints/conversations.py`** MODIFIED (2 new endpoints, now 86 total):
+  - `POST /conversations/{id}/tech-visit-confirm`: Seller says "Precisa de visita" → sends day list to client, sets step to `global_tech_visit_schedule_day`
+  - `POST /conversations/{id}/tech-visit-to-quote`: Seller says "Seguir orçamento" → sets `global_menu_done=True`, starts domain quote flow
+
+- **`frontend/src/api/conversations.ts`** MODIFIED:
+  - Added `techVisitConfirm()` and `techVisitToQuote()` API calls
+
+- **`frontend/src/pages/Conversations.tsx`** MODIFIED:
+  - Added state `techVisitAction` + handlers `handleTechVisitConfirm()`, `handleTechVisitToQuote()`
+  - Added two seller action buttons in ChatDrawer footer, visible when `conv.bot_step === 'global_tech_visit_waiting'`
+
+- **Migration `c978f46cdd18`**: `ALTER TYPE reminder_status_enum ADD VALUE 'skipped'/'failed'`
+
+### 24h Meta Window — Diagnosis + Solution
+- **Affected**: `reminder_service.py` sends proactively (outside window possible) → now has template fallback
+- **Not affected**: appointment confirmation (client just replied → window open), return-to-bot (triggered by seller after client interaction)
+- **Production**: set `reminder_template_name` in `company.extra_settings` for guaranteed delivery
+
+## Recent Features (2026-03-17) — 3 Operational Fronts — VPS Pre-Deploy
 **Frente 1 — Bot: Agendamento após confirmação de orçamento**
 - Chatbot flow (`chatbot_flow.py`) extended with scheduling steps after quote confirmation
 - New steps: `schedule_ask` → `schedule_date` → `schedule_slot` → `schedule_confirmed`

@@ -687,12 +687,45 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
 
         context["selected_items"] = []
         context["selected_item_ids"] = []
-        return _reply_assumed(
+        return _reply_buttons(
             conversation,
             db,
             text=(
                 "Não encontrei esse endereço no nosso cadastro. "
-                "Vou encaminhar seu atendimento para um de nossos especialistas "
+                "Você já tem as medidas dos ambientes que quer orçar?"
+            ),
+            buttons=[
+                {"id": "has_measures_yes", "title": "Sim, tenho as medidas"},
+                {"id": "has_measures_no",  "title": "Não tenho"},
+            ],
+            next_step="ask_has_measures",
+            context=context,
+        )
+
+    if current_step == "ask_has_measures":
+        normalized = text.strip().lower()
+        if normalized in {"has_measures_yes", "sim", "s", "yes", "y", "1", "sim, tenho as medidas"}:
+            return _reply_text(
+                conversation,
+                db,
+                text=(
+                    "Perfeito! Me envie as medidas dos ambientes.\n"
+                    "Você pode mandar uma por vez:\n"
+                    "1 sacada 1,20 x 1,40\n\n"
+                    "Ou várias de uma vez:\n"
+                    "1 janela sala 1,29 x 1,19\n"
+                    "1 sacada 2,00 x 1,30\n\n"
+                    "⚠️ *Importante:* Quando o instalador chegar ao local, ele irá tirar as medidas "
+                    "oficiais e pode haver alteração no orçamento."
+                ),
+                next_step="manual_measurements",
+                context=context,
+            )
+        return _reply_assumed(
+            conversation,
+            db,
+            text=(
+                "Tudo bem! Vou encaminhar seu atendimento para um de nossos especialistas "
                 "montar o orçamento para você 😊\n\n"
                 "Em breve entraremos em contato!"
             ),

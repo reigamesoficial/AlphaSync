@@ -341,3 +341,142 @@ def return_conversation_to_bot(
     if sent_wa:
         msg += " Cliente notificado via WhatsApp."
     return ReturnToBotResponse(ok=True, message=msg)
+
+
+@router.post("/{conversation_id}/tech-visit-confirm", response_model=ReturnToBotResponse, tags=["Conversations"])
+def tech_visit_confirm(
+    conversation_id: int,
+    company_id: int = Depends(get_tenant_company_id),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+) -> ReturnToBotResponse:
+    """
+    Ação do vendedor: 'Precisa de visita técnica'.
+    Retorna o bot ao cliente com a lista de dias disponíveis para agendar a visita.
+    """
+    if current_user.role not in (UserRole.MASTER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.SELLER):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado.")
+
+    from app.db.models import Conversation as _Conv
+    conv_obj = db.scalar(select(_Conv).where(_Conv.id == conversation_id, _Conv.company_id == company_id))
+    if not conv_obj:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversa não encontrada.")
+
+    company = db.scalar(select(Company).where(Company.id == company_id))
+    if not company:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Empresa não encontrada.")
+
+    from app.domains._shared import global_menu as _gm
+    from app.db.models import ConversationStatus as _CS
+
+    cfg = _gm._get_schedule_cfg(company, db)
+    available_days = _gm._compute_available_days(cfg)
+
+    ctx = dict(conv_obj.bot_context or {})
+    ctx["global_available_days"] = available_days
+
+    conv_obj.status = _CS.BOT
+    conv_obj.bot_step = "global_tech_visit_schedule_day"
+
+    from sqlalchemy.orm.attributes import flag_modified
+    from app.domains._shared.flow_helpers import json_safe
+    conv_obj.bot_context = json_safe(ctx)
+    flag_modified(conv_obj, "bot_context")
+    db.add(conv_obj)
+
+    sent_wa = False
+    try:
+        access_token = company.settings.whatsapp_access_token if company.settings else None
+        phone_id = company.whatsapp_phone_number_id
+        if access_token and phone_id and conv_obj.phone and available_days:
+            from app.services.whatsapp_service import WhatsAppService
+            rows = [{"id": d["id"], "title": d["label"], "description": ""} for d in available_days]
+            WhatsAppService().send_list_message(
+                access_token=access_token,
+                phone_number_id=phone_id,
+                to=conv_obj.phone,
+                header="Agendar visita técnica",
+                body="Ótimo! Escolha um dia para a visita técnica:",
+                button_text="Ver dias",
+                sections=[{"title": "Dias disponíveis", "rows": rows}],
+            )
+            sent_wa = True
+        elif access_token and phone_id and conv_obj.phone and not available_days:
+            from app.services.whatsapp_service import WhatsAppService
+            WhatsAppService().send_text(
+                access_token=access_token,
+                phone_number_id=phone_id,
+                to=conv_obj.phone,
+                body="No momento não há dias disponíveis para visita técnica. Nossa equipe entrará em contato em breve.",
+            )
+            conv_obj.bot_step = "global_done"
+    except Exception:
+        pass
+
+    db.commit()
+
+    msg = "Visita técnica confirmada. Bot enviará lista de dias ao cliente."
+    if sent_wa:
+        msg += " Lista enviada via WhatsApp."
+    return ReturnToBotResponse(ok=True, message=msg)
+
+
+@router.post("/{conversation_id}/tech-visit-to-quote", response_model=ReturnToBotResponse, tags=["Conversations"])
+def tech_visit_to_quote(
+    conversation_id: int,
+    company_id: int = Depends(get_tenant_company_id),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+) -> ReturnToBotResponse:
+    """
+    Ação do vendedor: 'Seguir orçamento' após visita técnica.
+    Retorna o bot ao fluxo de orçamento do domínio.
+    """
+    if current_user.role not in (UserRole.MASTER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.SELLER):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado.")
+
+    from app.db.models import Conversation as _Conv, ConversationStatus as _CS
+    conv_obj = db.scalar(select(_Conv).where(_Conv.id == conversation_id, _Conv.company_id == company_id))
+    if not conv_obj:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversa não encontrada.")
+
+    company = db.scalar(select(Company).where(Company.id == company_id))
+    if not company:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Empresa não encontrada.")
+
+    from app.domains._shared.flow_helpers import json_safe
+    from sqlalchemy.orm.attributes import flag_modified
+
+    ctx = dict(conv_obj.bot_context or {})
+    ctx["global_menu_done"] = True
+    ctx["global_intent"] = "quote"
+    ctx.pop("global_tech_visit_reason", None)
+
+    conv_obj.status = _CS.BOT
+    conv_obj.bot_step = "start"
+    conv_obj.bot_context = json_safe(ctx)
+    flag_modified(conv_obj, "bot_context")
+    db.add(conv_obj)
+
+    sent_wa = False
+    try:
+        access_token = company.settings.whatsapp_access_token if company.settings else None
+        phone_id = company.whatsapp_phone_number_id
+        if access_token and phone_id and conv_obj.phone:
+            from app.services.whatsapp_service import WhatsAppService
+            WhatsAppService().send_text(
+                access_token=access_token,
+                phone_number_id=phone_id,
+                to=conv_obj.phone,
+                body="Ótimo! Vamos iniciar o processo de orçamento. 😊 Por favor, me informe seu nome completo:",
+            )
+            sent_wa = True
+    except Exception:
+        pass
+
+    db.commit()
+
+    msg = "Bot retomado para fluxo de orçamento."
+    if sent_wa:
+        msg += " Cliente notificado via WhatsApp."
+    return ReturnToBotResponse(ok=True, message=msg)
