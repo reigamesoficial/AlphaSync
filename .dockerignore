@@ -1,0 +1,62 @@
+# ── Segurança ────────────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Git ──────────────────────────────────────────────────────────────────────
+.git
+.gitignore
+
+# ── Dev artifacts ─────────────────────────────────────────────────────────────
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info
+.eggs/
+dist/
+build/
+*.egg
+
+# ── DB locais ────────────────────────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+enderecos.db
+
+# ── Node (frontend build dentro do Docker) ───────────────────────────────────
+node_modules/
+npm-debug.log*
+frontend/node_modules/
+frontend/.vite/
+
+# ── Logs e temporários ───────────────────────────────────────────────────────
+logs/
+*.log
+*.tmp
+*.bak
+*.swp
+.DS_Store
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.iml
+
+# ── Cobertura e testes ────────────────────────────────────────────────────────
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ── Assets e docs que não vão para o container ───────────────────────────────
+attached_assets/
+*.md
+ROADMAP.md
+DEPLOY.md
+
+# ── Migrations __pycache__ ───────────────────────────────────────────────────
+migrations/__pycache__/
+migrations/env.py__pycache__/
