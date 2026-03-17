@@ -8,7 +8,7 @@ import Topbar from '../components/layout/Topbar'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import { PageSpinner } from '../components/ui/Spinner'
-import { listConversations, listConversationMessages, getConversation, generateQuote } from '../api/conversations'
+import { listConversations, listConversationMessages, getConversation, generateQuote, returnToBot } from '../api/conversations'
 import type { GenerateQuoteItemM2 } from '../api/conversations'
 import { getCompanyProfile } from '../api/company'
 import type { Conversation, ConversationMessage, PaginatedResponse } from '../types'
@@ -198,6 +198,15 @@ function DateSeparator({ date }: { date: string }) {
 const MESH_OPTIONS = ['3x3', '5x5', '10x10']
 const COLOR_OPTIONS = ['Preto', 'Branco', 'Grafite', 'Bege', 'Transparente']
 
+function formatDuration(minutes: number | null | undefined): string {
+  if (!minutes || minutes <= 0) return '—'
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  if (h === 0) return `${m} min`
+  if (m === 0) return `${h}h`
+  return `${h}h${m.toString().padStart(2, '0')}`
+}
+
 function QuoteModal({
   convId,
   onClose,
@@ -220,6 +229,7 @@ function QuoteModal({
 
   const [manualDesc, setManualDesc] = useState('')
   const [manualValue, setManualValue] = useState('')
+  const [manualDuration, setManualDuration] = useState('')
   const [manualNotes, setManualNotes] = useState('')
 
   function addItem() {
@@ -270,10 +280,12 @@ function QuoteModal({
           setSubmitting(false)
           return
         }
+        const dur = parseInt(manualDuration)
         result = await generateQuote(convId, {
           mode: 'manual',
           description: manualDesc.trim(),
           value: val,
+          duration_minutes: (!isNaN(dur) && dur > 0) ? dur : undefined,
           notes: manualNotes || undefined,
         })
       }
@@ -370,7 +382,7 @@ function QuoteModal({
                           </button>
                         )}
                       </div>
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-4 gap-2">
                         <div>
                           <label className="text-[10px] text-slate-500 mb-1 block">Largura (m)</label>
                           <input
@@ -406,6 +418,17 @@ function QuoteModal({
                             onChange={(e) => updateItem(idx, 'quantity', parseInt(e.target.value) || 1)}
                           />
                         </div>
+                        <div>
+                          <label className="text-[10px] text-slate-500 mb-1 block">Tempo (min)</label>
+                          <input
+                            type="number"
+                            min="1"
+                            className="input"
+                            placeholder="—"
+                            value={it.duration_minutes || ''}
+                            onChange={(e) => updateItem(idx, 'duration_minutes', parseInt(e.target.value) || undefined as unknown as number)}
+                          />
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -435,17 +458,35 @@ function QuoteModal({
                   onChange={(e) => setManualDesc(e.target.value)}
                 />
               </div>
-              <div>
-                <label className="form-label">Valor total (R$)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  className="input"
-                  placeholder="0,00"
-                  value={manualValue}
-                  onChange={(e) => setManualValue(e.target.value)}
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="form-label">Valor total (R$)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    className="input"
+                    placeholder="0,00"
+                    value={manualValue}
+                    onChange={(e) => setManualValue(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Tempo estimado (min)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    className="input"
+                    placeholder="ex: 90"
+                    value={manualDuration}
+                    onChange={(e) => setManualDuration(e.target.value)}
+                  />
+                  {manualDuration && parseInt(manualDuration) > 0 && (
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      = {formatDuration(parseInt(manualDuration))}
+                    </p>
+                  )}
+                </div>
               </div>
               <div>
                 <label className="form-label">Observações (opcional)</label>
@@ -507,6 +548,7 @@ function ChatDrawer({
   const [loading, setLoading] = useState(true)
   const [quoteModalOpen, setQuoteModalOpen] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [returningToBot, setReturningToBot] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -526,6 +568,20 @@ function ChatDrawer({
     const val = result.total_value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
     setToast(`Orçamento #${result.quote_id} criado — Total: ${val}`)
     setTimeout(() => setToast(null), 5000)
+  }
+
+  async function handleReturnToBot() {
+    setReturningToBot(true)
+    try {
+      const res = await returnToBot(conv.id)
+      setToast(res.message)
+      setTimeout(() => setToast(null), 5000)
+    } catch {
+      setToast('Erro ao retornar ao bot. Tente novamente.')
+      setTimeout(() => setToast(null), 4000)
+    } finally {
+      setReturningToBot(false)
+    }
   }
 
   // Group messages by date
@@ -618,19 +674,31 @@ function ChatDrawer({
             {CHANNEL_LABELS[conv.channel] ?? conv.channel}
           </span>
         </div>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <p className="text-slate-700 text-[10px]">
             {messages.length} mensagem{messages.length !== 1 ? 's' : ''}
           </p>
-          {serviceDomain === 'protection_network' && (
-            <button
-              onClick={() => setQuoteModalOpen(true)}
-              className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-emerald-600/20 text-emerald-400 border border-emerald-600/30 hover:bg-emerald-600/30 transition-colors"
-            >
-              <Calculator className="w-3.5 h-3.5" />
-              Gerar Orçamento
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {conv.status === 'assumed' && serviceDomain === 'protection_network' && (
+              <button
+                onClick={handleReturnToBot}
+                disabled={returningToBot}
+                className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-violet-600/20 text-violet-400 border border-violet-600/30 hover:bg-violet-600/30 transition-colors disabled:opacity-50"
+              >
+                <Bot className="w-3.5 h-3.5" />
+                {returningToBot ? 'Enviando...' : 'Retornar ao Bot'}
+              </button>
+            )}
+            {serviceDomain === 'protection_network' && (
+              <button
+                onClick={() => setQuoteModalOpen(true)}
+                className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-emerald-600/20 text-emerald-400 border border-emerald-600/30 hover:bg-emerald-600/30 transition-colors"
+              >
+                <Calculator className="w-3.5 h-3.5" />
+                Gerar Orçamento
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

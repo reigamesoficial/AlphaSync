@@ -206,3 +206,19 @@ def on_startup():
 
     logger.info(f"  Pronto em : {_elapsed:.1f} ms")
     logger.info(_bar)
+
+    # 5. Iniciar scheduler de tarefas periódicas (lembretes, etc.)
+    try:
+        from app.core import scheduler as _scheduler
+        _scheduler.start()
+    except Exception as _exc:
+        logger.warning(f"  Scheduler : não iniciado — {_exc}")
+
+
+@app.on_event("shutdown")
+def on_shutdown():
+    try:
+        from app.core import scheduler as _scheduler
+        _scheduler.stop()
+    except Exception:
+        pass

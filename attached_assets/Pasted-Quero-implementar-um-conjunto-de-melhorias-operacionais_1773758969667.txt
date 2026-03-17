@@ -1,0 +1,179 @@
+Quero implementar um conjunto de melhorias operacionais importantes no AlphaSync, sem refatorar o projeto inteiro e preservando a arquitetura atual.
+
+Importante:
+- manter multiempresa
+- manter roles e permissões já implementadas
+- preservar os fluxos existentes
+- fazer em etapas pequenas
+- primeiro analisar o que já existe, depois implementar o que faltar
+
+==================================================
+MELHORIA 1 — CONFIRMAÇÃO PREMIUM DO AGENDAMENTO
+==================================================
+
+Hoje o bot já cria o agendamento após o cliente escolher dia e horário.
+
+Quero melhorar a mensagem final de confirmação para uma versão premium, clara e profissional.
+
+Exemplo desejado:
+
+"Perfeito! Seu agendamento ficou confirmado:
+
+📅 Dia: Quinta-feira, 20/03
+⏰ Horário: 10:00 às 12:00
+📍 Endereço: Rua X, número Y
+
+Nossa equipe irá até você nesse horário.
+Se precisar alterar alguma informação, é só me avisar 😊"
+
+Regras:
+- usar data formatada de forma amigável
+- usar horário formatado
+- incluir endereço quando fizer sentido
+- manter tom humanizado
+- não quebrar o fluxo atual
+
+==================================================
+MELHORIA 2 — ENDEREÇO NÃO CADASTRADO → HUMANO → VOLTA AO BOT
+==================================================
+
+No domínio protection_network, quando o cliente informar um endereço que não está cadastrado no catálogo de medidas:
+
+- o bot não deve travar tentando seguir o orçamento automático
+- ele deve encaminhar automaticamente para atendimento humano / vendedor montar o orçamento
+
+Fluxo desejado:
+
+1. cliente envia endereço
+2. sistema não encontra endereço no catálogo
+3. bot informa algo como:
+   "Não encontrei esse endereço no cadastro. Vou encaminhar seu atendimento para um especialista montar seu orçamento, tudo bem?"
+4. conversa vai para status/handoff humano
+5. vendedor monta o orçamento manualmente pelo painel de conversa
+6. depois que o orçamento estiver criado, o sistema deve permitir voltar ao bot automaticamente para seguir com o agendamento
+
+Quero que você implemente a lógica completa desse retorno ao bot.
+
+Exemplo:
+- orçamento manual criado na conversa
+- sistema marca que a conversa pode voltar para o fluxo automatizado
+- bot envia:
+  "Seu orçamento já está pronto. Deseja agendar a instalação agora?"
+- segue para o fluxo de agendamento já existente
+
+Importante:
+- isso deve funcionar de forma clara no painel da conversa
+- o vendedor deve ter um botão/ação para “retornar ao bot” quando o orçamento estiver pronto, se isso ainda não existir
+- preservar histórico e contexto da conversa
+
+==================================================
+MELHORIA 3 — LEMBRETE 24 HORAS ANTES DO SERVIÇO
+==================================================
+
+Quero implementar lembrete de agendamento 24 horas antes do serviço para o cliente.
+
+Importante:
+- não depender da janela de 24h da Meta
+- não depender apenas da lógica atual do WhatsApp nudge
+- quero uma solução operacional estável para disparar a mensagem
+
+Quero que você:
+1. analise a melhor forma de implementar isso no contexto atual do projeto
+2. proponha uma solução prática
+3. implemente a base da funcionalidade
+
+Pode ser usando:
+- scheduler interno
+- cron
+- fila
+- integração com alguma extensão/serviço externo
+- qualquer mecanismo confiável que se encaixe no projeto atual
+
+Objetivo:
+- 24 horas antes do appointment.start_at
+- disparar uma mensagem de lembrete ao cliente
+
+Exemplo de mensagem:
+"Olá! Passando para confirmar seu atendimento agendado para amanhã às 10:00. Se precisar de alguma informação, estou por aqui 😊"
+
+Quero que a solução fique preparada para produção, com:
+- controle para não enviar duplicado
+- registro de envio
+- possibilidade de configurar a mensagem por empresa no futuro
+
+==================================================
+MELHORIA 4 — TEMPO DE SERVIÇO
+==================================================
+
+Precisamos adicionar o campo "tempo de serviço" em dois lugares:
+
+1. Cadastro de medidas
+No domínio protection_network, cada medida/item cadastrado deve poder ter um tempo estimado de serviço.
+
+Exemplo:
+- Janela sala → 30 min
+- Sacada em L → 2h
+- Tela varanda → 1h30
+
+Quero que esse campo seja persistido e apareça no painel de medidas.
+
+2. Orçamento manual pela conversa
+No fluxo manual do vendedor dentro da conversa, ao gerar orçamento:
+- no modo calcular m²
+- e no modo valor fixo
+
+deve ser possível informar tempo de serviço estimado.
+
+Esse tempo deve ficar vinculado ao orçamento/item e ser útil para:
+- cálculo operacional futuro
+- agenda
+- painel do instalador
+
+Formato sugerido:
+- duration_minutes
+ou equivalente
+- mostrar no frontend de forma amigável:
+  - 30 min
+  - 1h
+  - 1h30
+  - 2h
+
+==================================================
+ENTREGA
+==================================================
+
+Quero que você trabalhe em etapas:
+
+ETAPA 1
+- auditar o que já existe para:
+  - confirmação do agendamento
+  - handoff humano
+  - retorno ao bot
+  - lembrete 24h
+  - tempo de serviço
+
+ETAPA 2
+- implementar confirmação premium do agendamento
+
+ETAPA 3
+- implementar handoff humano quando endereço não cadastrado
+- implementar retorno ao bot após orçamento manual criado
+
+ETAPA 4
+- implementar lembrete 24h antes do serviço com solução prática e estável
+
+ETAPA 5
+- implementar campo tempo de serviço:
+  - no catálogo de medidas
+  - no orçamento manual pela conversa
+
+ETAPA 6
+- validar tudo funcionalmente
+- mostrar arquivos alterados
+- mostrar endpoints criados/alterados
+- explicar como cada fluxo ficou
+
+Importante:
+- não quebrar o protection_network atual
+- preservar o restante dos domínios
+- manter o sistema preparado para deploy

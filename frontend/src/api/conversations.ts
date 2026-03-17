@@ -29,6 +29,7 @@ export interface GenerateQuoteItemM2 {
   width_m: number
   height_m: number
   quantity: number
+  duration_minutes?: number
 }
 
 export interface GenerateQuoteRequestM2 {
@@ -43,6 +44,7 @@ export interface GenerateQuoteRequestManual {
   mode: 'manual'
   description: string
   value: number
+  duration_minutes?: number
   notes?: string
 }
 
@@ -59,6 +61,18 @@ export async function generateQuote(
   const { data } = await api.post<GenerateQuoteResponse>(
     `/conversations/${conversationId}/generate-quote`,
     body,
+  )
+  return data
+}
+
+export interface ReturnToBotResponse {
+  ok: boolean
+  message: string
+}
+
+export async function returnToBot(conversationId: number): Promise<ReturnToBotResponse> {
+  const { data } = await api.post<ReturnToBotResponse>(
+    `/conversations/${conversationId}/return-to-bot`,
   )
   return data
 }

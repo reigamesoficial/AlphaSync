@@ -33,6 +33,7 @@ class GenerateQuoteItemM2(BaseModel):
     width_m: float = Field(gt=0)
     height_m: float = Field(gt=0)
     quantity: int = Field(default=1, ge=1)
+    duration_minutes: int | None = Field(default=None, ge=1)
 
 
 class GenerateQuoteRequestM2(BaseModel):
@@ -47,6 +48,7 @@ class GenerateQuoteRequestManual(BaseModel):
     mode: Literal["manual"]
     description: str = Field(min_length=1, max_length=500)
     value: float = Field(gt=0)
+    duration_minutes: int | None = Field(default=None, ge=1)
     notes: str | None = None
 
 
@@ -54,6 +56,11 @@ class GenerateQuoteResponse(BaseModel):
     quote_id: int
     total_value: float
     items_count: int
+
+
+class ReturnToBotResponse(BaseModel):
+    ok: bool
+    message: str
 
 
 @router.get("", response_model=PaginatedResponse[ConversationResponse])
@@ -192,6 +199,7 @@ def generate_quote_from_conversation(
                 "width_cm": width,
                 "height_cm": height,
                 "quantity": it.quantity,
+                "duration_minutes": it.duration_minutes,
                 "unit_price": price_per_m2,
                 "total_price": total_price,
                 "service_type": "protection_network",
@@ -221,6 +229,7 @@ def generate_quote_from_conversation(
             "width_cm": None,
             "height_cm": None,
             "quantity": 1,
+            "duration_minutes": body.duration_minutes,
             "unit_price": total_value,
             "total_price": total_value,
             "service_type": "protection_network",
@@ -254,6 +263,7 @@ def generate_quote_from_conversation(
             width_cm=item_data["width_cm"],
             height_cm=item_data["height_cm"],
             quantity=item_data["quantity"],
+            duration_minutes=item_data.get("duration_minutes"),
             unit_price=item_data["unit_price"],
             total_price=item_data["total_price"],
             notes=item_data["notes"],
@@ -269,3 +279,65 @@ def generate_quote_from_conversation(
         total_value=float(total_value),
         items_count=len(quote_items_data),
     )
+
+
+@router.post("/{conversation_id}/return-to-bot", response_model=ReturnToBotResponse, tags=["Conversations"])
+def return_conversation_to_bot(
+    conversation_id: int,
+    company_id: int = Depends(get_tenant_company_id),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+) -> ReturnToBotResponse:
+    """
+    Retorna uma conversa em atendimento humano (ASSUMED) de volta ao bot.
+    Define status=BOT e bot_step=schedule_ask, depois envia uma mensagem
+    ao cliente via WhatsApp notificando que o orçamento está pronto.
+    """
+    if current_user.role not in (UserRole.MASTER_ADMIN, UserRole.COMPANY_ADMIN, UserRole.SELLER):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado.")
+
+    repo = ConversationsRepository(db)
+    conv = repo.get_full_by_id_and_company(conversation_id, company_id)
+    if not conv:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversa não encontrada.")
+
+    company = db.scalar(select(Company).where(Company.id == company_id))
+    if not company:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Empresa não encontrada.")
+
+    from app.db.models import ConversationStatus as _CS, Conversation as _Conv
+    conv_obj = db.scalar(
+        select(_Conv).where(_Conv.id == conversation_id, _Conv.company_id == company_id)
+    )
+    if not conv_obj:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversa não encontrada.")
+
+    conv_obj.status = _CS.BOT
+    conv_obj.bot_step = "schedule_ask"
+    db.add(conv_obj)
+
+    sent_wa = False
+    try:
+        access_token = company.settings.whatsapp_access_token if company.settings else None
+        phone_id = company.whatsapp_phone_number_id
+        if access_token and phone_id and conv_obj.phone:
+            from app.services.whatsapp_service import WhatsAppService
+            WhatsAppService().send_text(
+                access_token=access_token,
+                phone_number_id=phone_id,
+                to=conv_obj.phone,
+                body=(
+                    "Olá! Seu orçamento já está pronto 😊\n\n"
+                    "Deseja agendar a instalação agora? Responda *Sim* para continuar."
+                ),
+            )
+            sent_wa = True
+    except Exception:
+        pass
+
+    db.commit()
+
+    msg = "Conversa retornada ao bot com sucesso."
+    if sent_wa:
+        msg += " Cliente notificado via WhatsApp."
+    return ReturnToBotResponse(ok=True, message=msg)

@@ -686,6 +686,7 @@ class QuoteItem(TimestampMixin, Base):
         nullable=False,
     )
 
+    duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     domain_data: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
@@ -804,6 +805,7 @@ class PNAddressMeasurement(TimestampMixin, Base):
     width_m: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     height_m: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     quantity: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 

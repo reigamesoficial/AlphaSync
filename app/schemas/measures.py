@@ -61,6 +61,7 @@ class ItemResponse(IDSchema):
     width_m: float
     height_m: float
     quantity: int
+    duration_minutes: int | None
     notes: str | None
     is_active: bool
     area_m2: float
@@ -132,6 +133,7 @@ class ItemCreate(BaseSchema):
     width_m: float = Field(gt=0)
     height_m: float = Field(gt=0)
     quantity: int = Field(default=1, ge=1)
+    duration_minutes: int | None = Field(default=None, ge=1)
     notes: str | None = None
 
     @field_validator("label")
@@ -146,6 +148,7 @@ class ItemUpdate(BaseSchema):
     width_m: float | None = Field(default=None, gt=0)
     height_m: float | None = Field(default=None, gt=0)
     quantity: int | None = Field(default=None, ge=1)
+    duration_minutes: int | None = Field(default=None, ge=1)
     notes: str | None = None
     is_active: bool | None = None
 

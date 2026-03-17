@@ -6,6 +6,7 @@ from typing import Any
 
 from sqlalchemy.orm.attributes import flag_modified
 
+from app.db.models import ConversationStatus
 from app.domains.protection_network.address_catalog import (
     AddressCatalog,
     format_measure_choice_title,
@@ -118,6 +119,25 @@ def _reply_list(conversation, db, *, header: str, body: str, button_text: str, s
     if extra:
         payload.update(extra)
     return payload
+
+
+def _full_weekday_date_pt(d) -> str:
+    """Retorna data no formato 'Quinta-feira, 20/03' (nome completo do dia)."""
+    WEEKDAYS_FULL = [
+        "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira",
+        "Sexta-feira", "Sábado", "Domingo",
+    ]
+    return f"{WEEKDAYS_FULL[d.weekday()]}, {d.day:02d}/{d.month:02d}"
+
+
+def _reply_assumed(conversation, db, *, text: str, context: dict[str, Any]) -> dict[str, Any]:
+    """Encaminha a conversa para atendimento humano (status ASSUMED)."""
+    conversation.status = ConversationStatus.ASSUMED
+    conversation.bot_step = "awaiting_quote"
+    conversation.bot_context = _json_safe(context)
+    flag_modified(conversation, "bot_context")
+    db.flush()
+    return {"action": "assumed", "text": text, "context": context}
 
 
 def _normalize_yes_no(text: str) -> str | None:
@@ -667,19 +687,15 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
 
         context["selected_items"] = []
         context["selected_item_ids"] = []
-        return _reply_text(
+        return _reply_assumed(
             conversation,
             db,
             text=(
-                "Não encontrei medidas salvas para esse endereço.\n\n"
-                "Me envie as medidas.\n"
-                "Você pode mandar uma por vez:\n"
-                "1 sacada 1,20 x 1,40\n\n"
-                "Ou várias linhas de uma vez:\n"
-                "1 janela sala 1,29 x 1,19\n"
-                "1 sacada 2,00 x 1,30"
+                "Não encontrei esse endereço no nosso cadastro. "
+                "Vou encaminhar seu atendimento para um de nossos especialistas "
+                "montar o orçamento para você 😊\n\n"
+                "Em breve entraremos em contato!"
             ),
-            next_step="manual_measurements",
             context=context,
         )
 
@@ -1362,23 +1378,24 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
             notes="Agendado pelo chatbot WhatsApp.",
         )
         db.commit()
-        day_label = context.get("schedule_day_label") or ""
-        if not day_label:
-            date_str = context.get("schedule_date") or ""
-            if date_str:
-                from datetime import date as _d
-                try:
-                    day_label = _format_date_pt(_d.fromisoformat(date_str))
-                except Exception:
-                    day_label = date_str
+        from datetime import date as _d
+        date_str = chosen_slot["start_dt"][:10]
+        try:
+            full_date = _full_weekday_date_pt(_d.fromisoformat(date_str))
+        except Exception:
+            full_date = context.get("schedule_day_label") or date_str
+        address_raw = context.get("address_raw") or context.get("address") or ""
+        address_line = f"📍 *{address_raw}*\n" if address_raw.strip() else ""
         return _reply_text(
             conversation,
             db,
             text=(
-                f"Agendamento confirmado! ✅\n\n"
-                f"📅 *{day_label}*\n"
-                f"🕐 *{chosen_slot['label']}*\n\n"
-                "Nossa equipe entrará em contato para confirmar os detalhes. Até lá! 😊"
+                f"Perfeito! Seu agendamento ficou confirmado 🎉\n\n"
+                f"📅 *{full_date}*\n"
+                f"⏰ *{chosen_slot['label']}*\n"
+                f"{address_line}"
+                f"\nNossa equipe estará no local nesse horário. "
+                f"Se precisar alterar alguma informação, é só me avisar 😊"
             ),
             next_step="schedule_confirmed",
             context=context,

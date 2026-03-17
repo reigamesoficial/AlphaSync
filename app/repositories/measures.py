@@ -146,6 +146,7 @@ class MeasuresRepository:
             width_m=Decimal(str(payload.width_m)),
             height_m=Decimal(str(payload.height_m)),
             quantity=payload.quantity,
+            duration_minutes=payload.duration_minutes,
             notes=payload.notes,
             is_active=True,
         )

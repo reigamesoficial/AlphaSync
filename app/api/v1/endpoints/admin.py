@@ -508,3 +508,29 @@ def get_global_metrics(
         "quotes": {"total": total_quotes},
         "appointments": {"total": total_appointments},
     }
+
+
+# ============================================================
+# REMINDERS
+# ============================================================
+
+@router.post("/reminders/send-pending", tags=["Admin"])
+def trigger_send_pending_reminders(
+    _: User = Depends(require_master_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    """
+    Dispara manualmente o envio de lembretes pendentes de agendamento.
+    Útil para testes e reprocessamento em caso de falha do scheduler.
+    Acesso: apenas MASTER_ADMIN.
+    """
+    from app.services.reminder_service import send_pending_reminders
+    stats = send_pending_reminders(db)
+    return {
+        "ok": True,
+        "stats": stats,
+        "message": (
+            f"Lembretes processados: {stats['sent']} enviados, "
+            f"{stats['failed']} com falha, {stats['skipped']} sem credenciais."
+        ),
+    }
