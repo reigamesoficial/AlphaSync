@@ -1,0 +1,106 @@
+Precisamos melhorar a UX do agendamento no chatbot.
+
+Hoje o fluxo pede a data por texto no formato DD/MM.
+Quero alterar isso para uma experiência melhor com duas listas interativas no WhatsApp.
+
+Objetivo:
+substituir a digitação manual da data por:
+1. lista de dias disponíveis
+2. lista de horários disponíveis
+
+Importante:
+- não refatorar o projeto inteiro
+- preservar o fluxo atual de orçamento
+- apenas melhorar a etapa de agendamento
+- manter multiempresa
+- respeitar as regras de agenda já implementadas
+
+==================================================
+NOVO FLUXO DE AGENDAMENTO NO BOT
+==================================================
+
+Depois que o cliente confirmar que deseja agendar:
+
+ETAPA 1 — escolher dia
+O bot deve enviar uma lista interativa com os dias disponíveis.
+
+Mensagem sugerida:
+"Perfeito. Escolha um dia para a instalação:"
+
+A lista deve conter apenas:
+- dias futuros
+- dias permitidos pela configuração da empresa
+- dias que tenham pelo menos um slot disponível
+
+Formato de exibição sugerido:
+- Segunda 18/03
+- Terça 19/03
+- Quarta 20/03
+
+Cada item da lista deve carregar um identificador seguro para o bot processar.
+
+ETAPA 2 — escolher horário
+Depois que o cliente escolher o dia, o bot deve enviar uma segunda lista interativa com os horários disponíveis daquele dia.
+
+Mensagem sugerida:
+"Ótimo. Agora escolha o horário disponível:"
+
+A lista deve conter apenas:
+- slots livres daquele dia
+- respeitando regras da empresa
+- respeitando conflito de instalador, se aplicável
+- respeitando duração dos blocos configurados
+
+Formato sugerido:
+- 08:00 às 10:00
+- 10:00 às 12:00
+- 14:00 às 16:00
+
+ETAPA 3 — criar agendamento
+Depois da escolha do horário:
+- criar Appointment real no banco
+- vincular a client_id, quote_id, endereço e valor do orçamento
+- confirmar o agendamento ao cliente
+
+==================================================
+REGRAS IMPORTANTES
+==================================================
+
+1. Não pedir data por texto manual se houver lista disponível
+2. Só mostrar dias que realmente tenham slot disponível
+3. Só mostrar horários realmente livres
+4. Se não houver dias disponíveis:
+   - informar isso claramente ao cliente
+5. Se o cliente escolher algo inválido:
+   - orientar e repetir a lista
+6. Manter compatibilidade com o fluxo atual e estados já existentes
+
+==================================================
+COMPATIBILIDADE WHATSAPP
+==================================================
+
+Usar reply_list quando possível.
+
+Se houver limitação do canal:
+- aceitar fallback por número
+- aceitar interactive.list_reply.id
+- aceitar texto correspondente ao item
+
+==================================================
+ENTREGA
+==================================================
+
+Quero que você:
+1. analise o fluxo atual de schedule_ask / schedule_date / schedule_slot
+2. altere para o modelo:
+   - schedule_day_choice
+   - schedule_slot_choice
+3. implemente as duas listas interativas
+4. valide funcionalmente
+5. mostre quais arquivos foram alterados
+6. explique como o fluxo ficou
+
+Importante:
+- preserve o restante do chatbot
+- não quebrar o protection_network
+- focar apenas na UX do agendamento

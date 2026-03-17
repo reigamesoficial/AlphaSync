@@ -481,12 +481,31 @@ def _compute_slots(target_date, cfg: dict[str, Any]) -> list[dict[str, Any]]:
         slot_end = current + _td(minutes=slot_minutes)
         slots.append({
             "id": f"slot_{current.strftime('%H%M')}",
-            "label": f"{current.strftime('%H:%M')} – {slot_end.strftime('%H:%M')}",
+            "label": f"{current.strftime('%H:%M')} às {slot_end.strftime('%H:%M')}",
             "start_dt": current.isoformat(),
             "end_dt": slot_end.isoformat(),
         })
         current = slot_end
     return slots
+
+
+def _compute_available_days(cfg: dict[str, Any], days_ahead: int = 21) -> list[dict[str, Any]]:
+    from datetime import date as _date, datetime as _dt, timedelta as _td
+    WEEKDAYS_SHORT = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+    today = _dt.today().date()
+    days: list[dict[str, Any]] = []
+    for i in range(1, days_ahead + 1):
+        candidate = today + _td(days=i)
+        if _compute_slots(candidate, cfg):
+            label = f"{WEEKDAYS_SHORT[candidate.weekday()]} {candidate.day:02d}/{candidate.month:02d}"
+            days.append({
+                "id": f"day_{candidate.strftime('%Y%m%d')}",
+                "date": candidate.isoformat(),
+                "label": label,
+            })
+        if len(days) >= 10:
+            break
+    return days
 
 
 def _format_date_pt(d) -> str:
@@ -1251,97 +1270,66 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
             ],
         )
 
-    if current_step == "schedule_ask":
-        if normalized in SCHEDULE_LATER_WORDS:
+    # ── helper: send the day-choice list ────────────────────────────────────
+    def _send_day_list(body_text: str, cfg: dict[str, Any]):
+        available_days = _compute_available_days(cfg)
+        if not available_days:
             return _reply_text(
                 conversation,
                 db,
-                text="Sem problema! Quando quiser agendar, pode entrar em contato conosco. Até mais!",
+                text=(
+                    "No momento não encontramos dias disponíveis para agendamento "
+                    "nos próximos dias. Por favor, entre em contato diretamente com nossa equipe."
+                ),
                 next_step="done",
                 context=context,
             )
-        return _reply_text(
+        context["schedule_available_days"] = available_days
+        rows = [{"id": d["id"], "title": d["label"], "description": ""} for d in available_days]
+        return _reply_list(
             conversation,
             db,
-            text="Ótimo! Em qual data prefere a instalação?\nMe envie no formato *DD/MM* (ex: 25/01).",
-            next_step="schedule_date",
+            header="Dias disponíveis",
+            body=body_text,
+            button_text="Ver dias",
+            sections=[{"title": "Próximos dias disponíveis", "rows": rows}],
+            next_step="schedule_day_choice",
             context=context,
         )
 
-    if current_step == "schedule_date":
-        from datetime import datetime as _now_dt
-        parsed = _parse_date_br(text)
-        today = _now_dt.today().date()
-        if parsed is None:
-            return _reply_text(
-                conversation,
-                db,
-                text="Não entendi a data. Por favor, envie no formato *DD/MM* (ex: 25/01).",
-                next_step="schedule_date",
-                context=context,
-            )
-        if parsed < today:
-            return _reply_text(
-                conversation,
-                db,
-                text="Essa data já passou. Por favor, escolha uma data futura no formato *DD/MM*.",
-                next_step="schedule_date",
-                context=context,
-            )
-        cfg = _get_schedule_cfg(company, db)
-        slots = _compute_slots(parsed, cfg)
+    # ── helper: send the slot-choice list ───────────────────────────────────
+    def _send_slot_list(chosen_day: dict[str, Any], cfg: dict[str, Any]):
+        from datetime import date as _date_cls
+        chosen_date = _date_cls.fromisoformat(chosen_day["date"])
+        slots = _compute_slots(chosen_date, cfg)
         if not slots:
-            return _reply_text(
-                conversation,
-                db,
-                text=f"Não há horários disponíveis em *{_format_date_pt(parsed)}*.\nTente outra data no formato *DD/MM*.",
-                next_step="schedule_date",
-                context=context,
+            return _send_day_list(
+                f"Não há horários disponíveis para *{chosen_day['label']}*. Escolha outro dia:",
+                cfg,
             )
-        context["schedule_date"] = parsed.isoformat()
+        context["schedule_date"] = chosen_day["date"]
+        context["schedule_day_label"] = chosen_day["label"]
         context["schedule_slots"] = slots
         rows = [{"id": s["id"], "title": s["label"], "description": ""} for s in slots[:10]]
         return _reply_list(
             conversation,
             db,
             header="Horários disponíveis",
-            body=f"Escolha um horário para *{_format_date_pt(parsed)}*:",
+            body=f"Ótimo! Agora escolha o horário para *{chosen_day['label']}*:",
             button_text="Ver horários",
-            sections=[{"title": "Horários", "rows": rows}],
-            next_step="schedule_slot",
+            sections=[{"title": "Horários disponíveis", "rows": rows}],
+            next_step="schedule_slot_choice",
             context=context,
         )
 
-    if current_step == "schedule_slot":
-        slots: list = context.get("schedule_slots") or []
-        date_str: str = context.get("schedule_date") or ""
-        chosen = next((s for s in slots if s["id"] == normalized or s["label"] == text.strip()), None)
-        if chosen is None:
-            for s in slots:
-                if normalized in s["id"] or normalized in s["label"].lower():
-                    chosen = s
-                    break
-        if chosen is None and len(slots) == 1:
-            chosen = slots[0]
-        if chosen is None:
-            rows = [{"id": s["id"], "title": s["label"], "description": ""} for s in slots[:10]]
-            return _reply_list(
-                conversation,
-                db,
-                header="Escolha um horário",
-                body="Por favor, selecione um dos horários abaixo:",
-                button_text="Ver horários",
-                sections=[{"title": "Horários", "rows": rows}],
-                next_step="schedule_slot",
-                context=context,
-            )
+    # ── helper: create appointment & confirm ────────────────────────────────
+    def _confirm_appointment(chosen_slot: dict[str, Any]):
         from datetime import datetime as _dt
         from decimal import Decimal as _Decimal
         from app.repositories.appointments import AppointmentsRepository as _AR
-        start_at = _dt.fromisoformat(chosen["start_dt"])
-        end_at = _dt.fromisoformat(chosen["end_dt"])
+        start_at = _dt.fromisoformat(chosen_slot["start_dt"])
+        end_at = _dt.fromisoformat(chosen_slot["end_dt"])
         address_raw = context.get("address_raw") or context.get("address") or ""
-        quote_id: int | None = None
         preview = context.get("quote_preview") or {}
         totals = preview.get("totals") or {}
         total_value = None
@@ -1350,16 +1338,16 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
                 total_value = _Decimal(str(totals["total_value"]))
             except Exception:
                 total_value = None
-        if not quote_id:
-            from sqlalchemy import select as _sel
-            from app.db.models import Quote as _Q
-            q = db.scalar(
-                _sel(_Q)
-                .where(_Q.company_id == company.id, _Q.client_id == client.id)
-                .order_by(_Q.created_at.desc())
-            )
-            if q:
-                quote_id = q.id
+        quote_id = None
+        from sqlalchemy import select as _sel
+        from app.db.models import Quote as _Q
+        q = db.scalar(
+            _sel(_Q)
+            .where(_Q.company_id == company.id, _Q.client_id == client.id)
+            .order_by(_Q.created_at.desc())
+        )
+        if q:
+            quote_id = q.id
         repo = _AR(db)
         repo.create_appointment(
             company_id=company.id,
@@ -1374,27 +1362,95 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
             notes="Agendado pelo chatbot WhatsApp.",
         )
         db.commit()
-        from datetime import datetime as _fmt_dt
-        date_label = ""
-        if date_str:
-            from datetime import date as _d
-            try:
-                date_label = _format_date_pt(_d.fromisoformat(date_str))
-            except Exception:
-                date_label = date_str
+        day_label = context.get("schedule_day_label") or ""
+        if not day_label:
+            date_str = context.get("schedule_date") or ""
+            if date_str:
+                from datetime import date as _d
+                try:
+                    day_label = _format_date_pt(_d.fromisoformat(date_str))
+                except Exception:
+                    day_label = date_str
         return _reply_text(
             conversation,
             db,
             text=(
                 f"Agendamento confirmado! ✅\n\n"
-                f"📅 *{date_label}*\n"
-                f"🕐 *{chosen['label']}*\n\n"
-                "Nossa equipe entrará em contato para confirmar. Até lá!"
+                f"📅 *{day_label}*\n"
+                f"🕐 *{chosen_slot['label']}*\n\n"
+                "Nossa equipe entrará em contato para confirmar os detalhes. Até lá! 😊"
             ),
             next_step="schedule_confirmed",
             context=context,
         )
 
+    # ── step: schedule_ask ───────────────────────────────────────────────────
+    if current_step == "schedule_ask":
+        if normalized in SCHEDULE_LATER_WORDS:
+            return _reply_text(
+                conversation,
+                db,
+                text="Sem problema! Quando quiser agendar, pode entrar em contato conosco. Até mais!",
+                next_step="done",
+                context=context,
+            )
+        cfg = _get_schedule_cfg(company, db)
+        return _send_day_list("Perfeito. Escolha um dia para a instalação:", cfg)
+
+    # ── step: schedule_day_choice ────────────────────────────────────────────
+    if current_step == "schedule_day_choice":
+        available_days: list = context.get("schedule_available_days") or []
+        chosen_day = next(
+            (d for d in available_days if d["id"] == normalized or d["label"].lower() == text.strip().lower()),
+            None,
+        )
+        if chosen_day is None:
+            for d in available_days:
+                if normalized in d["id"] or normalized in d["label"].lower():
+                    chosen_day = d
+                    break
+        if chosen_day is None and len(available_days) == 1:
+            chosen_day = available_days[0]
+        if chosen_day is None:
+            cfg = _get_schedule_cfg(company, db)
+            return _send_day_list("Por favor, selecione um dos dias disponíveis:", cfg)
+        cfg = _get_schedule_cfg(company, db)
+        return _send_slot_list(chosen_day, cfg)
+
+    # ── step: schedule_slot_choice (main) ───────────────────────────────────
+    if current_step in ("schedule_slot_choice", "schedule_slot"):
+        slots: list = context.get("schedule_slots") or []
+        chosen_slot = next(
+            (s for s in slots if s["id"] == normalized or s["label"].lower() == text.strip().lower()),
+            None,
+        )
+        if chosen_slot is None:
+            for s in slots:
+                if normalized in s["id"] or normalized in s["label"].lower():
+                    chosen_slot = s
+                    break
+        if chosen_slot is None and len(slots) == 1:
+            chosen_slot = slots[0]
+        if chosen_slot is None:
+            rows = [{"id": s["id"], "title": s["label"], "description": ""} for s in slots[:10]]
+            return _reply_list(
+                conversation,
+                db,
+                header="Escolha um horário",
+                body="Por favor, selecione um dos horários abaixo:",
+                button_text="Ver horários",
+                sections=[{"title": "Horários disponíveis", "rows": rows}],
+                next_step="schedule_slot_choice",
+                context=context,
+            )
+        return _confirm_appointment(chosen_slot)
+
+    # ── step: schedule_date (backward compat — redirect to day list) ─────────
+    if current_step == "schedule_date":
+        cfg = _get_schedule_cfg(company, db)
+        return _send_day_list("Escolha um dia disponível para a instalação:", cfg)
+
+    # ── step: schedule_confirmed ─────────────────────────────────────────────
     if current_step == "schedule_confirmed":
         return _reply_text(
             conversation,
