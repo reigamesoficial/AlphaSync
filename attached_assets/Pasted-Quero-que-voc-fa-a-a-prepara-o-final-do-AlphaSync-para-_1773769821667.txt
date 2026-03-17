@@ -1,0 +1,231 @@
+Quero que você faça a preparação final do AlphaSync para produção e deploy, deixando o projeto pronto para ser levado para a VPS.
+
+Importante:
+- não abrir novas features
+- não refatorar o projeto inteiro
+- não mudar arquitetura sem necessidade
+- focar apenas em produção, consistência e deploy
+- pode corrigir e ajustar tudo que for necessário para deixar o projeto pronto para produção
+- no final, quero tudo pronto para eu subir na VPS e testar lá
+
+==================================================
+OBJETIVO
+==================================================
+
+Deixar o AlphaSync production-ready e deploy-ready.
+
+Quero que você revise e ajuste tudo o que for necessário em:
+- variáveis de ambiente
+- configuração de produção
+- Docker
+- docker-compose
+- Nginx
+- Gunicorn/Uvicorn
+- Alembic/migrations
+- frontend build
+- backend runtime
+- healthchecks
+- logs
+- segurança básica
+- documentação de deploy
+
+No final, quero um projeto pronto para ser enviado para a VPS e testado lá.
+
+==================================================
+ETAPA 1 — AUDITORIA FINAL DE PRODUÇÃO
+==================================================
+
+Primeiro faça uma revisão final completa do estado atual do projeto para produção.
+
+Verifique:
+1. variáveis de ambiente necessárias
+2. secrets obrigatórios
+3. dependências backend e frontend
+4. Dockerfiles
+5. docker-compose
+6. nginx.conf
+7. gunicorn.conf.py
+8. Alembic e migrations
+9. health endpoints
+10. logs
+11. pontos que ainda podem quebrar no deploy
+
+Depois dessa auditoria:
+- corrija tudo o que for necessário
+- padronize o que estiver inconsistente
+- elimine riscos de produção que ainda restarem
+
+==================================================
+ETAPA 2 — VARIÁVEIS DE AMBIENTE E .ENV
+==================================================
+
+Quero que você deixe o projeto com ambiente de produção bem preparado.
+
+Faça o seguinte:
+
+1. revisar todas as variáveis realmente usadas pelo sistema
+2. remover inconsistências entre código e .env.example
+3. atualizar .env.example para refletir o estado real do projeto
+4. garantir que as variáveis novas estejam documentadas
+5. garantir que tudo necessário para produção esteja claramente listado
+
+Inclua no .env.example, se aplicável:
+- APP_ENV
+- APP_DEBUG
+- SECRET_KEY
+- DATABASE_URL
+- CORS_ORIGINS
+- OPENAI_API_KEY
+- WHATSAPP_WEBHOOK_VERIFY_TOKEN
+- WHATSAPP_APP_SECRET
+- SEED_ADMIN_EMAIL
+- SEED_ADMIN_PASSWORD
+- quaisquer outras realmente necessárias
+
+Também quero que você valide:
+- se existe fallback seguro para variáveis opcionais
+- se variáveis obrigatórias bloqueiam startup em produção quando ausentes ou fracas
+
+==================================================
+ETAPA 3 — DOCKER E COMPOSE
+==================================================
+
+Quero o stack pronto para VPS com Docker.
+
+Revise e ajuste:
+- Dockerfile do backend
+- Dockerfile do frontend
+- docker-compose.yml
+- .dockerignore
+
+Garanta:
+- builds corretos
+- imagens enxutas
+- usuário não-root quando aplicável
+- healthchecks
+- restart policies
+- volumes corretos
+- services consistentes
+- migrations bem integradas
+- stack pronta para produção
+
+Se houver qualquer inconsistência no compose, corrija.
+
+==================================================
+ETAPA 4 — NGINX E RUNTIME
+==================================================
+
+Revise e ajuste o ambiente de runtime de produção.
+
+Quero:
+- nginx.conf pronto para uso em VPS
+- proxy correto para backend e frontend
+- headers de segurança adequados
+- gzip
+- cache de assets
+- fallback SPA correto
+- preparação para SSL
+- server_name fácil de trocar
+
+Revise também:
+- gunicorn.conf.py
+- workers
+- timeout
+- max_requests
+- logs
+- bind correto
+
+Se houver qualquer ajuste necessário para estabilidade, aplique.
+
+==================================================
+ETAPA 5 — BANCO E MIGRATIONS
+==================================================
+
+Quero que você valide a camada de banco para produção.
+
+Faça:
+1. revisar Alembic
+2. revisar o histórico de migrations
+3. verificar se há risco em banco novo
+4. verificar se há risco em banco já existente
+5. corrigir o que for necessário para deploy seguro
+
+Objetivo:
+- alembic upgrade head funcionar corretamente
+- banco novo subir corretamente
+- banco existente migrar corretamente
+
+Se o baseline atual ainda estiver frágil, fortaleça isso.
+
+==================================================
+ETAPA 6 — FRONTEND DE PRODUÇÃO
+==================================================
+
+Revise o frontend para produção.
+
+Verifique:
+- build sem erro
+- rotas funcionando atrás do Nginx
+- baseURL correto
+- assets corretos
+- fallback SPA correto
+- tema persistente funcionando
+- páginas principais funcionando sem dependência de ambiente dev
+
+Corrija o que faltar.
+
+==================================================
+ETAPA 7 — LOGS, HEALTHCHECKS E ROBUSTEZ
+==================================================
+
+Quero que você revise e deixe sólido:
+- /health
+- /health/full
+- logs do backend
+- logs úteis para deploy e operação
+- tratamento de falhas que possam derrubar a aplicação
+- scheduler/reminders
+- IA com fallback seguro
+- PDF
+- WhatsApp reminder/HSM
+
+Se houver qualquer risco de crash ou comportamento ruim em produção, corrija.
+
+==================================================
+ETAPA 8 — DOCUMENTAÇÃO DE DEPLOY
+==================================================
+
+Quero que você deixe a documentação pronta para eu subir na VPS.
+
+Crie ou atualize um documento tipo DEPLOY.md com:
+1. pré-requisitos da VPS
+2. configuração de domínio
+3. configuração de .env
+4. comandos para subir o stack
+5. comandos para migrations
+6. seed do admin
+7. checklist pós-subida
+8. como testar health
+9. como trocar server_name
+10. como ativar SSL depois
+11. problemas comuns e solução
+
+Quero instruções claras e executáveis.
+
+==================================================
+ETAPA 9 — ENTREGA FINAL
+==================================================
+
+Ao final, quero que você entregue:
+
+1. lista de arquivos alterados
+2. o que foi corrigido em cada um
+3. checklist final de produção
+4. status final:
+   - pronto para deploy em VPS
+   - ou o que ainda falta
+
+Importante:
+- não começar novas features
+- foque apenas em deixar o projeto realmente pronto para produção
+- trate isso como fechamento final antes do deploy

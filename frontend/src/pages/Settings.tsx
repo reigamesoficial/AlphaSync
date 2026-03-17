@@ -353,7 +353,7 @@ export default function Settings() {
                 <Field label="Token de verificação WhatsApp">
                   <input className="input" type="password" placeholder="••••••••" {...field('whatsapp_verify_token')} />
                 </Field>
-                {settings?.extra_settings?.bot && (
+                {!!(settings?.extra_settings?.bot) && (
                   <div className="mt-4 bg-surface-700/50 rounded-lg p-4">
                     <p className="text-slate-400 text-xs font-semibold uppercase tracking-wide mb-3">Módulos habilitados</p>
                     <div className="grid grid-cols-2 gap-2">

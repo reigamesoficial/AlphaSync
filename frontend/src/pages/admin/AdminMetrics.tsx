@@ -56,7 +56,7 @@ export default function AdminMetrics() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await getAdminMetrics() as Metrics
+      const data = (await getAdminMetrics()) as unknown as Metrics
       setMetrics(data)
       setLastRefresh(new Date())
     } catch {

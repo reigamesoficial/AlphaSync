@@ -50,6 +50,7 @@ services:
     env_file:
       - .env
     environment:
+      # Sobrescreve DATABASE_URL e REDIS_URL para apontar para os containers
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-alphasync}:${POSTGRES_PASSWORD:-alphasync}@postgres:5432/${POSTGRES_DB:-alphasync}
       REDIS_URL: redis://redis:6379/0
     depends_on:
@@ -57,10 +58,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    ports:
-      - "${BACKEND_PORT:-8000}:8000"
     volumes:
       - storage_data:/app/storage
+      - logs_data:/app/logs
     networks:
       - alphasync
     healthcheck:
@@ -84,6 +84,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 10s
 
   # ── Nginx (reverse proxy) ─────────────────────────────────────────────────────
   nginx:
@@ -105,12 +106,14 @@ services:
       - alphasync
 
   # ── Migrations (job único — roda e sai) ───────────────────────────────────────
+  # Uso: docker compose --profile migrate up migrations
   migrations:
     build:
       context: .
       dockerfile: Dockerfile
       target: runtime
     container_name: alphasync_migrations
+    restart: "no"
     env_file:
       - .env
     environment:
@@ -124,12 +127,36 @@ services:
     profiles:
       - migrate
 
+  # ── Seed (job único — roda e sai) ─────────────────────────────────────────────
+  # Uso: docker compose --profile seed run --rm seed
+  seed:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: alphasync_seed
+    restart: "no"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-alphasync}:${POSTGRES_PASSWORD:-alphasync}@postgres:5432/${POSTGRES_DB:-alphasync}
+    command: ["python", "scripts/seed_admin.py"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - alphasync
+    profiles:
+      - seed
+
 volumes:
   postgres_data:
     driver: local
   redis_data:
     driver: local
   storage_data:
+    driver: local
+  logs_data:
     driver: local
 
 networks:

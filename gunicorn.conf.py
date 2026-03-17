@@ -16,11 +16,15 @@ bind = os.getenv("GUNICORN_BIND", "0.0.0.0:8000")
 # Uvicorn async workers (ASGI)
 worker_class = "uvicorn.workers.UvicornWorker"
 
-# Formula recomendada: 2-4 × CPUs
+# Fórmula recomendada: 2-4 × CPUs
+# VPS 2 vCPU → 2 workers (recomendado para 2 GB RAM)
+# VPS 4 vCPU → 4 workers
+# Ajuste via GUNICORN_WORKERS no .env se necessário.
 cpu_count = multiprocessing.cpu_count()
-workers = int(os.getenv("GUNICORN_WORKERS", max(2, cpu_count * 2 + 1)))
+_default_workers = min(max(2, cpu_count * 2), 8)  # máx 8 para evitar OOM
+workers = int(os.getenv("GUNICORN_WORKERS", _default_workers))
 
-# Threads por worker (útil para workloads mistos)
+# Threads por worker (útil para workloads mistos; manter 1 com UvicornWorker)
 threads = int(os.getenv("GUNICORN_THREADS", 1))
 
 # ── Timeouts ───────────────────────────────────────────────────────────────
@@ -38,9 +42,10 @@ access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s %(D)sµs'
 proc_name = "alphasync"
 
 # ── Limits ─────────────────────────────────────────────────────────────────
+# Reinicia cada worker após N requests para mitigar memory leaks
 max_requests = int(os.getenv("GUNICORN_MAX_REQUESTS", 1000))
 max_requests_jitter = int(os.getenv("GUNICORN_MAX_REQUESTS_JITTER", 100))
 
 # ── Worker recycling ───────────────────────────────────────────────────────
-# Reinicia workers periodicamente para evitar memory leaks
-preload_app = False  # False com UvicornWorker para evitar problemas de fork
+# preload_app=False necessário com UvicornWorker para evitar problemas de fork
+preload_app = False

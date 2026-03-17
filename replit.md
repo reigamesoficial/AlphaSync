@@ -293,6 +293,16 @@ Master admin has `company_id = null` in JWT — cannot access tenant endpoints (
   - **docker-compose.yml**: 6 serviços (postgres, redis, backend, frontend, nginx, migrations); healthchecks em todos; profiles para migrations; volumes nomeados
   - **nginx/nginx.conf**: reverse proxy com rate limiting (api: 60r/m, auth: 10r/m), headers de segurança, SSL comentado pronto para ativar
   - **DEPLOY.md**: guia completo de deploy em VPS (setup, first deploy, SSL, backups, atualizações, checklist de 15 itens)
+- [x] Production Hardening (2026-03-17) — Revisão final pré-VPS
+  - **nginx/nginx.conf**: removido `proxy_cache_valid` sem zona (era no-op/warning); `server_tokens off`; `Content-Security-Policy`; `Permissions-Policy`; `proxy_hide_header X-Powered-By`; static asset `expires 1y` correto; location de assets movida para fora do bloco `/`
+  - **.env.example**: adicionada seção "Docker Compose" com `POSTGRES_USER/PASSWORD/DB`, `POSTGRES_PORT`, `REDIS_PORT`, `HTTP_PORT`, `HTTPS_PORT`, `BACKEND_PORT`; documentado `DATABASE_URL` com driver psycopg2
+  - **docker-compose.yml**: `restart: "no"` explícito no migrations; volume `logs_data` para logs do backend; adicionado serviço `seed` com profile `seed` para execução via `docker compose --profile seed run --rm seed`
+  - **gunicorn.conf.py**: fórmula de workers limitada a máx 8 para evitar OOM em VPS pequena; comentários de sizing documentados
+  - **migrations/env.py**: `include_schemas` + `include_object` aplicados tanto em modo offline quanto online (consistência)
+  - **app/api/health.py**: removido router morto (nunca incluído — health endpoints estão em `app/main.py`)
+  - **frontend TypeScript**: corrigidos 2 erros que bloqueavam `npm run build`: `!!()` cast em `Settings.tsx:356` (unknown→boolean); `as unknown as Metrics` em `AdminMetrics.tsx:59`
+  - **frontend/vite.config.ts**: adicionado `build.rollupOptions.output.manualChunks` — bundle principal caiu de 929 kB → 437 kB (vendor-react 49 kB, vendor-ui 66 kB, vendor-charts 375 kB separados)
+  - **DEPLOY.md**: reescrito com 15 seções — rotação de logs Docker, renovação SSL automática (script + cron), serviço seed no compose, tabela de problemas comuns, checklist ampliado
 - [x] Phase 7: DomainDefinition model + CRUD API + frontend `/admin/domains`
   - **Model** (`app/db/models.py`): `DomainDefinition` table (key, display_name, description, icon, is_active, is_builtin, config_json JSON)
   - **Repository** (`app/repositories/domain_definitions.py`): `DomainDefinitionsRepository` extends `BaseRepository`

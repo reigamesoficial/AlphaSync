@@ -42,8 +42,8 @@ target_metadata = Base.metadata
 
 # ── helpers ─────────────────────────────────────────────────────────────────
 
-def include_schemas(name, type_, parent_names, reflected, compare_to):
-    """Filtra apenas o schema public (evita pg_catalog etc)."""
+def include_object(object, name, type_, reflected, compare_to):
+    """Filtra apenas o schema public (evita pg_catalog, information_schema, etc.)."""
     if type_ == "schema":
         return name in (None, "public")
     return True
@@ -66,7 +66,7 @@ def run_migrations_offline() -> None:
         compare_type=True,
         compare_server_default=True,
         include_schemas=True,
-        include_object=include_schemas,
+        include_object=include_object,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -88,6 +88,8 @@ def run_migrations_online() -> None:
             target_metadata=target_metadata,
             compare_type=True,
             compare_server_default=True,
+            include_schemas=True,
+            include_object=include_object,
         )
         with context.begin_transaction():
             context.run_migrations()
