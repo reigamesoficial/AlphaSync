@@ -415,22 +415,16 @@ class ConversationService:
 
         return domain_result
 
-    def _execute_domain_flow(
+    def _call_domain_chatbot(
         self,
         *,
         company: Company,
         conversation: Conversation,
         client: Client,
         inbound_message: dict[str, Any],
+        chatbot_component: Any,
     ) -> dict[str, Any] | None:
-        try:
-            chatbot_component = domain_engine.get_chatbot_flow_for_company(company)
-        except Exception:
-            return None
-
-        if chatbot_component is None:
-            return None
-
+        """Invoke the domain-specific chatbot component."""
         if hasattr(chatbot_component, "handle_inbound_message"):
             return chatbot_component.handle_inbound_message(
                 company=company,
@@ -439,7 +433,6 @@ class ConversationService:
                 inbound_message=inbound_message,
                 db=self.db,
             )
-
         if hasattr(chatbot_component, "handle_message"):
             return chatbot_component.handle_message(
                 company=company,
@@ -448,8 +441,98 @@ class ConversationService:
                 inbound_message=inbound_message,
                 db=self.db,
             )
-
         return None
+
+    def _execute_domain_flow(
+        self,
+        *,
+        company: Company,
+        conversation: Conversation,
+        client: Client,
+        inbound_message: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        from app.domains._shared.flow_helpers import RESET_WORDS, current_context, json_safe
+        from app.domains._shared import global_menu
+
+        step = conversation.bot_step or "start"
+        txt = (
+            inbound_message.get("message_text")
+            or inbound_message.get("interactive_reply_title")
+            or inbound_message.get("interactive_reply_id")
+            or ""
+        ).strip().lower()
+
+        # ── GLOBAL RESET: any reset-word clears global_menu_done and returns to start ──
+        if txt in RESET_WORDS:
+            ctx = current_context(conversation)
+            ctx.pop("global_menu_done", None)
+            ctx.pop("global_intent", None)
+            conversation.bot_step = "start"
+            conversation.bot_context = json_safe(ctx)
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(conversation, "bot_context")
+            self.db.flush()
+            step = "start"
+
+        ctx = current_context(conversation)
+
+        # ── SHOW GLOBAL MENU when step is 'start' and no menu_done flag ──────────────
+        if step == "start" and not ctx.get("global_menu_done"):
+            return global_menu.show_main_menu(
+                conversation, self.db, client=client, ctx=ctx
+            )
+
+        # ── HANDLE ALL GLOBAL STEPS ───────────────────────────────────────────────────
+        if global_menu.is_global_step(step):
+            try:
+                chatbot_component = domain_engine.get_chatbot_flow_for_company(company)
+            except Exception:
+                chatbot_component = None
+
+            def _domain_caller() -> dict[str, Any] | None:
+                if chatbot_component is None:
+                    return None
+                empty_msg = dict(inbound_message)
+                empty_msg["message_text"] = ""
+                empty_msg["interactive_reply_id"] = None
+                empty_msg["interactive_reply_title"] = None
+                return self._call_domain_chatbot(
+                    company=company,
+                    conversation=conversation,
+                    client=client,
+                    inbound_message=empty_msg,
+                    chatbot_component=chatbot_component,
+                )
+
+            result = global_menu.handle_global_step(
+                company=company,
+                conversation=conversation,
+                client=client,
+                inbound_message=inbound_message,
+                db=self.db,
+                current_step=step,
+                domain_caller=_domain_caller,
+            )
+            if result is not None:
+                return result
+            # None means "delegate to domain" (opt_quote path after greeting returned)
+
+        # ── DOMAIN-SPECIFIC FLOW ──────────────────────────────────────────────────────
+        try:
+            chatbot_component = domain_engine.get_chatbot_flow_for_company(company)
+        except Exception:
+            return None
+
+        if chatbot_component is None:
+            return None
+
+        return self._call_domain_chatbot(
+            company=company,
+            conversation=conversation,
+            client=client,
+            inbound_message=inbound_message,
+            chatbot_component=chatbot_component,
+        )
 
     def _persist_quote_preview(
         self,
@@ -623,6 +706,18 @@ class ConversationService:
                     button_text=domain_result.get("button_text") or "Escolher",
                     sections=domain_result.get("sections") or [],
                 )
+
+            elif action == "assumed":
+                text = (domain_result.get("text") or "").strip()
+                if text:
+                    send_result = self.whatsapp_service.send_text(
+                        access_token=access_token,
+                        phone_number_id=phone_number_id,
+                        to=to_phone,
+                        body=text,
+                    )
+                else:
+                    send_result = {"messages": []}
 
             else:
                 return {

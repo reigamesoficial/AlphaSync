@@ -126,6 +126,8 @@ class ReminderStatus(str, PyEnum):
     SENT = "sent"
     CONFIRMED = "confirmed"
     DECLINED = "declined"
+    SKIPPED = "skipped"
+    FAILED = "failed"
 
 
 class SessionStatus(str, PyEnum):

@@ -15,6 +15,12 @@ Configurações por empresa via extra_settings:
   - reminder_enabled: bool (default True)
   - reminder_hours_before: float (default 24.0)
   - reminder_message: str com placeholder {time} (default abaixo)
+
+Nota sobre janela de 24h da Meta:
+  Lembretes são enviados proativamente. Se o cliente não interagiu nas
+  últimas 24h, o envio via send_text pode ser rejeitado pela API do WhatsApp
+  (erro 131026 - janela fechada). Para produção, configure um template HSM
+  aprovado e defina 'reminder_template_name' em extra_settings.
 """
 from __future__ import annotations
 
@@ -40,6 +46,8 @@ def _get_cfg(company) -> dict:
         "enabled": bool(extra.get("reminder_enabled", True)),
         "hours_before": float(extra.get("reminder_hours_before", _DEFAULT_HOURS_BEFORE)),
         "message": str(extra.get("reminder_message", "") or _DEFAULT_MESSAGE),
+        "template_name": extra.get("reminder_template_name") or None,
+        "template_language": extra.get("reminder_template_language") or "pt_BR",
     }
 
 
@@ -88,8 +96,7 @@ def send_pending_reminders(db: Session) -> dict[str, int]:
         for appointment in due:
             if not access_token or not phone_id:
                 repo.update_appointment(
-                    appointment.id,
-                    company_id=company.id,
+                    appointment,
                     reminder_status=ReminderStatus.SKIPPED,
                 )
                 total_skipped += 1
@@ -104,8 +111,7 @@ def send_pending_reminders(db: Session) -> dict[str, int]:
             )
             if not client_phone:
                 repo.update_appointment(
-                    appointment.id,
-                    company_id=company.id,
+                    appointment,
                     reminder_status=ReminderStatus.SKIPPED,
                 )
                 total_skipped += 1
@@ -118,16 +124,18 @@ def send_pending_reminders(db: Session) -> dict[str, int]:
                 time_str = start_at.strftime("%H:%M")
                 message = cfg["message"].format(time=time_str)
 
-                wa.send_text(
+                _send_reminder_message(
+                    wa=wa,
                     access_token=access_token,
-                    phone_number_id=phone_id,
-                    to=client_phone,
-                    body=message,
+                    phone_id=phone_id,
+                    client_phone=client_phone,
+                    message=message,
+                    template_name=cfg.get("template_name"),
+                    template_language=cfg.get("template_language", "pt_BR"),
                 )
 
                 repo.update_appointment(
-                    appointment.id,
-                    company_id=company.id,
+                    appointment,
                     reminder_status=ReminderStatus.SENT,
                     reminder_sent_at=now,
                 )
@@ -141,11 +149,13 @@ def send_pending_reminders(db: Session) -> dict[str, int]:
                     "Reminder failed: appointment %s, company %s: %s",
                     appointment.id, company.id, exc,
                 )
-                repo.update_appointment(
-                    appointment.id,
-                    company_id=company.id,
-                    reminder_status=ReminderStatus.FAILED,
-                )
+                try:
+                    repo.update_appointment(
+                        appointment,
+                        reminder_status=ReminderStatus.FAILED,
+                    )
+                except Exception:
+                    pass
                 total_failed += 1
 
         try:
@@ -155,3 +165,45 @@ def send_pending_reminders(db: Session) -> dict[str, int]:
             db.rollback()
 
     return {"sent": total_sent, "failed": total_failed, "skipped": total_skipped}
+
+
+def _send_reminder_message(
+    *,
+    wa,
+    access_token: str,
+    phone_id: str,
+    client_phone: str,
+    message: str,
+    template_name: str | None,
+    template_language: str,
+) -> None:
+    """
+    Tenta enviar o lembrete como texto simples (dentro da janela de 24h da Meta).
+    Se falhar com erro de janela fechada (ou qualquer erro) e um template HSM
+    estiver configurado, tenta enviar via template.
+    """
+    try:
+        wa.send_text(
+            access_token=access_token,
+            phone_number_id=phone_id,
+            to=client_phone,
+            body=message,
+        )
+        return
+    except Exception as exc:
+        if template_name:
+            logger.warning(
+                "send_text failed (%s), trying template '%s' for %s",
+                exc, template_name, client_phone,
+            )
+        else:
+            raise
+
+    wa.send_template_message(
+        access_token=access_token,
+        phone_number_id=phone_id,
+        to=client_phone,
+        template_name=template_name,
+        language_code=template_language,
+        components=[],
+    )

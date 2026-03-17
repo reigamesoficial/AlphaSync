@@ -1,0 +1,265 @@
+Quero implementar uma camada global de fluxo inicial e pós-orçamento para TODOS os domínios do AlphaSync, preservando a arquitetura atual e aplicando regras comuns a todos os serviços.
+
+Importante:
+- não refatorar o projeto inteiro
+- preservar a arquitetura atual
+- preservar multiempresa
+- preservar roles, agenda, bot e orçamentos já existentes
+- fazer em etapas pequenas
+- primeiro auditar o que já existe, depois implementar o que faltar
+
+==================================================
+OBJETIVO GERAL
+==================================================
+
+Antes de qualquer coleta de informação específica do domínio, o bot deve sempre apresentar um menu inicial interativo com opções curtas, objetivas e compatíveis com o WhatsApp.
+
+Esse menu deve existir para TODOS os domínios.
+
+Menu inicial desejado:
+
+"Em que posso ajudar hoje?"
+
+Opções:
+1. Solicitar orçamento
+2. Agendar visita técnica
+3. Tenho orçamento e quero agendar
+4. Reagendar serviço
+5. Cancelar agendamento
+
+Importante:
+- usar lista interativa ou botões de forma compacta
+- evitar textos longos que possam gerar problema no WhatsApp
+- manter fallback por número/texto se necessário
+
+==================================================
+PARTE 1 — AUDITORIA DE COMPATIBILIDADE COM META / JANELA 24H
+==================================================
+
+Antes de implementar novas regras, quero que você audite a situação atual das mensagens automáticas para verificar:
+
+1. se confirmação de agendamento e lembretes estão dependendo de mensagem comum dentro da janela de 24h da Meta
+2. se o sistema atual conseguiria falhar ao tentar mandar essas mensagens fora da janela
+3. qual é a solução correta e compatível para produção
+
+Quero um diagnóstico claro:
+- o que hoje depende da janela
+- o que não depende
+- o que precisa ser ajustado
+
+Se for necessário:
+- implementar mecanismo compatível para não depender da janela de 24h
+- preparar o sistema para uso de template message / estratégia equivalente / fallback seguro
+- sem quebrar o que já funciona
+
+==================================================
+PARTE 2 — MENU INICIAL GLOBAL PARA TODOS OS DOMÍNIOS
+==================================================
+
+Implementar um menu inicial padrão no bot para todos os domínios.
+
+Mensagem:
+"Em que posso ajudar hoje?"
+
+Opções:
+1. Solicitar orçamento
+2. Agendar visita técnica
+3. Tenho orçamento e quero agendar
+4. Reagendar serviço
+5. Cancelar agendamento
+
+Regras:
+- esse menu vem antes das perguntas do domínio
+- depois da escolha, o fluxo segue conforme a opção
+
+==================================================
+PARTE 3 — OPÇÃO: SOLICITAR ORÇAMENTO
+==================================================
+
+Se o cliente escolher "Solicitar orçamento":
+- seguir o fluxo normal do domínio correspondente
+
+Para protection_network:
+- se encontrar endereço cadastrado → seguir fluxo automático atual
+- se não encontrar endereço cadastrado:
+  1. perguntar: "Você já tem as medidas?" com botões Sim / Não
+  2. se SIM:
+     - permitir envio das medidas
+     - antes de seguir, disparar mensagem obrigatória:
+       "Lembrando que, quando o instalador chegar, ele irá tirar as medidas oficiais, e pode haver alteração no orçamento."
+     - depois seguir fluxo normal com orçamento baseado nas medidas informadas
+  3. se NÃO:
+     - encaminhar para orçamento manual do vendedor / humano
+     - manter o mecanismo de retorno ao bot depois
+
+==================================================
+PARTE 4 — OPÇÃO: AGENDAR VISITA TÉCNICA
+==================================================
+
+Se o cliente escolher "Agendar visita técnica":
+- perguntar o motivo da visita técnica
+- o cliente responde livremente
+
+Depois disso:
+- o bot não continua sozinho imediatamente
+- no painel da conversa deve aparecer para o vendedor um controle/ação com duas opções:
+  1. Precisa de visita
+  2. Seguir orçamento
+
+Se o vendedor escolher "Precisa de visita":
+- iniciar fluxo de agendamento de visita técnica
+- usar blocos de 1 hora
+- criar appointment de visita técnica
+
+Se o vendedor escolher "Seguir orçamento":
+- o bot retoma o fluxo de orçamento normal do domínio
+
+Importante:
+- isso vale para todos os domínios
+
+==================================================
+PARTE 5 — OPÇÃO: TENHO ORÇAMENTO E QUERO AGENDAR
+==================================================
+
+Se o cliente escolher "Tenho orçamento e quero agendar":
+- o sistema deve buscar se já existe orçamento enviado/registrado para esse cliente
+
+Se encontrar:
+- confirmar que encontrou
+- seguir diretamente para o fluxo padrão de agendamento
+
+Se não encontrar:
+- informar:
+  "Não encontrei um orçamento disponível para este atendimento."
+- seguir para o fluxo de orçamento do domínio
+
+Importante:
+- usar identificação segura do cliente/conversa/empresa
+- respeitar multiempresa
+- não puxar orçamento de outra empresa
+
+==================================================
+PARTE 6 — OPÇÃO: REAGENDAR SERVIÇO
+==================================================
+
+Se o cliente escolher "Reagendar serviço":
+- localizar o appointment existente
+- iniciar fluxo de reagendamento
+- mostrar novamente:
+  1. lista interativa de dias disponíveis
+  2. lista interativa de horários disponíveis
+
+Regras:
+- se selecionar reagendar, obrigatoriamente subir a lista de disponibilidade novamente
+- respeitar as mesmas regras de agenda:
+  - datas futuras
+  - dias permitidos
+  - slots disponíveis
+  - conflito de instalador
+  - duração do serviço, se aplicável
+
+Isso deve valer para todos os domínios.
+
+==================================================
+PARTE 7 — OPÇÃO: CANCELAR AGENDAMENTO
+==================================================
+
+Se o cliente escolher "Cancelar agendamento":
+- perguntar o motivo do cancelamento
+- depois perguntar:
+  "Tem algo que eu possa fazer para reverter a situação?"
+
+Se SIM:
+- perguntar como pode ajudar
+- encaminhar para vendedor/humano
+- manter histórico da conversa
+
+Se NÃO:
+- finalizar atendimento de forma educada
+
+Exemplo:
+"Agradecemos o contato. Ficamos à disposição caso precise de nós no futuro."
+
+Importante:
+- atualizar status do agendamento se necessário
+- manter consistência operacional
+
+==================================================
+PARTE 8 — TEMPO DE SERVIÇO PARA TODOS OS DOMÍNIOS
+==================================================
+
+As regras de tempo de serviço não devem ficar só em protection_network.
+
+Quero que você analise e aplique a lógica de tempo de serviço também aos outros domínios, quando fizer sentido.
+
+Objetivo:
+- appointments refletirem melhor a duração real
+- agenda respeitar duração do serviço
+- instalador ver a carga correta
+
+Para todos os domínios:
+- revisar se o orçamento ou serviço pode carregar duration_minutes
+- se fizer sentido, propagar isso para quote_items e agendamento
+- preservar o que já foi feito em protection_network
+
+==================================================
+PARTE 9 — REGRAS GLOBAIS DE AGENDAMENTO
+==================================================
+
+As regras abaixo devem valer para todos os domínios, salvo exceções específicas:
+
+- confirmação premium do agendamento
+- reagendamento com nova lista de disponibilidade
+- uso de blocos configuráveis por serviço/domínio
+- lembrete antes do atendimento
+- respeito ao tempo de serviço
+- respeito à disponibilidade da empresa
+- respeito à disponibilidade do instalador
+
+==================================================
+PARTE 10 — ENTREGA
+==================================================
+
+Quero que você trabalhe em etapas:
+
+ETAPA 1
+- auditar o que já existe hoje para:
+  - menu inicial
+  - janela de 24h da Meta
+  - agendar visita técnica
+  - orçamento existente
+  - reagendamento
+  - cancelamento
+  - tempo de serviço nos outros domínios
+
+ETAPA 2
+- implementar o menu inicial global
+
+ETAPA 3
+- implementar os fluxos:
+  - solicitar orçamento
+  - agendar visita técnica
+  - tenho orçamento e quero agendar
+  - reagendar serviço
+  - cancelar agendamento
+
+ETAPA 4
+- aplicar a regra especial de protection_network para medidas quando endereço não for encontrado
+
+ETAPA 5
+- revisar a questão da janela de 24h e deixar a solução pronta/segura
+
+ETAPA 6
+- expandir a lógica de tempo de serviço para os outros domínios onde fizer sentido
+
+ETAPA 7
+- validar funcionalmente
+- mostrar arquivos alterados
+- mostrar endpoints alterados/criados
+- explicar como cada fluxo ficou
+
+Importante:
+- preservar os fluxos já existentes
+- não quebrar o protection_network
+- aplicar a camada global com cuidado
+- manter tudo pronto para deploy
