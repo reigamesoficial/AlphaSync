@@ -80,7 +80,11 @@ const roleAccent: Record<string, string> = {
   master_admin:  'bg-amber-400',
 }
 
-export default function Sidebar() {
+interface SidebarProps {
+  onClose?: () => void
+}
+
+export default function Sidebar({ onClose }: SidebarProps) {
   const location = useLocation()
   const { user, logout } = useAuth()
   const { theme, toggleTheme } = useTheme()
@@ -117,6 +121,7 @@ export default function Sidebar() {
                 <NavLink
                   key={to}
                   to={to}
+                  onClick={onClose}
                   className={`group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 mb-0.5 ${
                     active
                       ? 'bg-brand-600/15 text-brand-400 border border-brand-500/25'

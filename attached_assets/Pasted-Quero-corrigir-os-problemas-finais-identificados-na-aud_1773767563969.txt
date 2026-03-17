@@ -1,0 +1,107 @@
+Quero corrigir os problemas finais identificados na auditoria antes do deploy.
+
+Importante:
+- não refatorar o projeto inteiro
+- preservar a arquitetura atual
+- focar apenas nas correções objetivas apontadas
+- implementar em etapas pequenas
+- mostrar arquivos alterados e o que foi corrigido
+
+==================================================
+PRIORIDADE 1 — CRM
+==================================================
+
+Corrigir os problemas do CRM:
+
+1. Paginação
+Hoje o frontend usa limit=200, mas o endpoint usa per_page.
+Corrigir para buscar corretamente mais registros.
+
+Objetivo:
+- usar o parâmetro correto
+- garantir que o CRM não fique truncado em 50 registros
+
+2. Estágios vazios
+Os estágios "Contactado" e "Visita Agendada" não recebem nenhum item.
+Quero corrigir isso com a melhor regra possível usando o que já existe no sistema hoje.
+
+Sem criar uma refatoração grande de modelo ainda.
+Pode usar fallback coerente com os dados atuais.
+
+3. quote_value zerado
+Hoje os cards do CRM mostram R$0.
+Corrigir para usar um valor realista baseado nos dados já existentes, se possível.
+
+4. Entrega do CRM
+Quero que o CRM fique funcional e coerente para produção, mesmo que a versão perfeita de sincronização de pipeline fique para depois.
+
+==================================================
+PRIORIDADE 2 — FINANCEIRO
+==================================================
+
+Corrigir a consistência do financeiro:
+
+1. Gráfico mensal
+Hoje o gráfico inclui DRAFT/CANCELLED/EXPIRED.
+Corrigir para usar apenas os status corretos de receita:
+- CONFIRMED
+- DONE
+
+2. Crescimento vs mês anterior
+Hoje o frontend compara períodos incompatíveis.
+Corrigir para comparar:
+- mês atual
+- mês anterior
+
+Se precisar, ajustar o endpoint para retornar:
+- revenue_current_month
+- revenue_prev_month
+
+3. Garantir consistência visual
+O KPI principal e o gráfico devem refletir a mesma lógica de receita.
+
+==================================================
+PRIORIDADE 3 — RESPONSIVIDADE MÍNIMA
+==================================================
+
+Corrigir o mínimo necessário para o frontend ficar aceitável antes do deploy:
+
+1. Sidebar
+- implementar colapso/menu responsivo em telas menores
+- evitar quebra abaixo de ~768px
+
+2. Schedule
+- ajustar o grid superior de 3 colunas para ter breakpoints responsivos
+
+3. Financial
+- garantir overflow-x-auto na área de Top Clientes, se necessário
+
+Não precisa refazer todo o design mobile.
+Quero apenas deixá-lo aceitável e sem quebra grave.
+
+==================================================
+ENTREGA
+==================================================
+
+Quero que você faça em etapas:
+
+ETAPA 1
+- corrigir CRM
+
+ETAPA 2
+- corrigir financeiro
+
+ETAPA 3
+- corrigir responsividade mínima
+
+ETAPA 4
+- validar tudo
+- mostrar:
+  - arquivos alterados
+  - endpoints alterados
+  - o que foi corrigido em cada problema da auditoria
+
+Importante:
+- não abrir novas features
+- não mexer no deploy ainda
+- focar só nessas correções finais

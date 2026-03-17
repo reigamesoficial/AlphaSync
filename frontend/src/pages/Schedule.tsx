@@ -211,7 +211,7 @@ export default function Schedule() {
             </div>
           )}
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="card p-5 flex items-center gap-4">
               <div className="w-11 h-11 bg-brand-500/15 rounded-xl flex items-center justify-center shrink-0">
                 <CalendarDays className="w-5 h-5 text-brand-400" />

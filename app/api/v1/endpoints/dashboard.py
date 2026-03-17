@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
+from sqlalchemy import case as sa_case, func, select
 from sqlalchemy.orm import Session
 
 from app.core.security import get_current_active_user
@@ -102,7 +102,19 @@ def get_financial_report(
 
     conversion_rate = round((quotes_confirmed + quotes_done) / total_quotes_period * 100, 1) if total_quotes_period else 0.0
 
-    # Monthly breakdown
+    # Current month boundaries (for growth comparison)
+    cur_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    revenue_current_month = db.execute(
+        select(func.coalesce(func.sum(Quote.total_value), 0))
+        .where(
+            Quote.company_id == company_id,
+            Quote.status.in_(revenue_statuses),
+            Quote.created_at >= cur_month_start,
+        )
+    ).scalar() or 0
+
+    # Monthly breakdown — filtered to revenue statuses only
     monthly_rows = db.execute(
         select(
             func.to_char(Quote.created_at, "Mon/YY").label("month"),
@@ -112,6 +124,7 @@ def get_financial_report(
         )
         .where(
             Quote.company_id == company_id,
+            Quote.status.in_(revenue_statuses),
             Quote.created_at >= period_start,
         )
         .group_by("month", "month_dt")
@@ -145,7 +158,8 @@ def get_financial_report(
 
     return {
         "revenue_total": float(revenue_total_row),
-        "revenue_last_month": float(revenue_last_month_row),
+        "revenue_current_month": float(revenue_current_month),
+        "revenue_prev_month": float(revenue_last_month_row),
         "quotes_confirmed": quotes_confirmed,
         "quotes_done": quotes_done,
         "clients_active": clients_active,
@@ -153,6 +167,89 @@ def get_financial_report(
         "monthly": monthly,
         "top_clients": top_clients,
     }
+
+
+@router.get("/crm")
+def get_crm_pipeline(
+    company_id: int = Depends(get_tenant_company_id),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Returns clients with their CRM pipeline stage calculated from client status + best quote status.
+    Stage priority logic:
+      - DONE quote        → 'won'
+      - CONFIRMED quote   → 'quote_sent'
+      - DRAFT quote       → 'visit'
+      - No quotes + qualified client → 'contacted'
+      - No quotes + lead client      → 'lead'
+      - inactive client   → 'lost'
+      - customer client   → 'won'
+    """
+    # Subquery: per-client best quote priority and top value
+    status_priority = sa_case(
+        (Quote.status == QuoteStatus.DONE, 5),
+        (Quote.status == QuoteStatus.CONFIRMED, 4),
+        (Quote.status == QuoteStatus.DRAFT, 3),
+        (Quote.status == QuoteStatus.EXPIRED, 2),
+        (Quote.status == QuoteStatus.CANCELLED, 1),
+        else_=0,
+    )
+
+    quote_sub = (
+        select(
+            Quote.client_id.label("client_id"),
+            func.max(status_priority).label("best_priority"),
+            func.max(Quote.total_value).label("top_value"),
+        )
+        .where(Quote.company_id == company_id)
+        .group_by(Quote.client_id)
+        .subquery()
+    )
+
+    rows = db.execute(
+        select(
+            Client.id,
+            Client.name,
+            Client.phone,
+            Client.status.label("client_status"),
+            quote_sub.c.best_priority,
+            quote_sub.c.top_value,
+        )
+        .outerjoin(quote_sub, quote_sub.c.client_id == Client.id)
+        .where(Client.company_id == company_id)
+        .order_by(Client.created_at.desc())
+        .limit(300)
+    ).all()
+
+    def _derive_stage(client_status: str, best_priority: int | None) -> str:
+        if client_status == "inactive":
+            return "lost"
+        if client_status == "customer":
+            return "won"
+        if best_priority is None:
+            return "contacted" if client_status == "qualified" else "lead"
+        if best_priority >= 5:
+            return "won"
+        if best_priority >= 4:
+            return "quote_sent"
+        if best_priority >= 3:
+            return "visit"
+        # Only EXPIRED or CANCELLED quotes remain
+        return "contacted" if client_status == "qualified" else "lead"
+
+    clients = []
+    for r in rows:
+        stage = _derive_stage(r.client_status, r.best_priority)
+        clients.append({
+            "id": r.id,
+            "name": r.name,
+            "phone": r.phone or "",
+            "stage": stage,
+            "quote_value": float(r.top_value) if r.top_value else 0.0,
+        })
+
+    return {"clients": clients}
 
 
 @router.get("/summary")

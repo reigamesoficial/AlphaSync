@@ -41,15 +41,8 @@ function fmtPhone(p: string) {
   return p
 }
 
-function stageFromClient(c: any): PipelineStage {
-  switch (c.status) {
-    case 'customer':  return 'won'
-    case 'inactive':  return 'lost'
-    case 'qualified': return 'quote_sent'
-    case 'lead':
-    default:          return 'lead'
-  }
-}
+// Stage is now computed server-side by GET /dashboard/crm
+
 
 interface ClientCardProps {
   client: Client
@@ -91,15 +84,15 @@ export default function CRM() {
 
   const load = useCallback(() => {
     setLoading(true)
-    api.get('/clients/?limit=200')
+    api.get('/dashboard/crm')
       .then(r => {
-        const data: Client[] = (r.data.items ?? r.data ?? []).map((c: any) => ({
+        const data: Client[] = (r.data.clients ?? []).map((c: any) => ({
           id: c.id,
           name: c.name,
           phone: c.phone ?? '',
-          stage: stageFromClient(c),
-          quote_value: 0,
-          seller_name: c.seller_name ?? c.seller?.name ?? undefined,
+          stage: c.stage as PipelineStage,
+          quote_value: c.quote_value ?? 0,
+          seller_name: undefined,
         }))
         setClients(data)
       })

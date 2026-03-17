@@ -11,7 +11,8 @@ interface MonthlyData { month: string; revenue: number; quotes: number }
 interface TopClient { client_name: string; total: number; quotes_count: number }
 interface FinancialData {
   revenue_total: number
-  revenue_last_month: number
+  revenue_current_month: number
+  revenue_prev_month: number
   quotes_confirmed: number
   quotes_done: number
   clients_active: number
@@ -89,7 +90,8 @@ export default function Financial() {
       .finally(() => setLoading(false))
   }, [period])
 
-  const revGrowth = data ? pct(data.revenue_total, data.revenue_last_month) : 0
+  // Correct growth: current month vs previous month (same metric, different period)
+  const revGrowth = data ? pct(data.revenue_current_month, data.revenue_prev_month) : 0
   const monthlySlice = data?.monthly.slice(-period) ?? []
 
   return (
@@ -129,7 +131,7 @@ export default function Financial() {
               <StatCard
                 label="Receita Total (período)"
                 value={fmt(data.revenue_total)}
-                sub={`${revGrowth >= 0 ? '+' : ''}${revGrowth.toFixed(1)}% vs mês anterior`}
+                sub={`Mês atual: ${fmt(data.revenue_current_month)} (${revGrowth >= 0 ? '+' : ''}${revGrowth.toFixed(1)}% vs anterior)`}
                 positive={revGrowth >= 0}
                 icon={<DollarSign className="w-5 h-5" />}
                 color="bg-brand-600/15 text-brand-400"
@@ -224,28 +226,30 @@ export default function Financial() {
               {data.top_clients.length === 0 ? (
                 <p className="text-slate-500 text-sm text-center py-8">Sem dados no período</p>
               ) : (
-                <div className="divide-y divide-surface-700">
-                  {data.top_clients.map((c, i) => {
-                    const pctOfTotal = data.revenue_total ? (c.total / data.revenue_total) * 100 : 0
-                    return (
-                      <div key={c.client_name} className="flex items-center gap-4 px-5 py-3 hover:bg-surface-700/30 transition-colors">
-                        <div className="w-6 h-6 rounded-full bg-surface-700 flex items-center justify-center text-slate-400 text-xs font-bold shrink-0">
-                          {i + 1}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-white text-sm font-medium truncate">{c.client_name}</p>
-                          <p className="text-slate-500 text-xs">{c.quotes_count} orçamento{c.quotes_count !== 1 ? 's' : ''}</p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="w-24 h-1.5 bg-surface-600 rounded-full overflow-hidden">
-                            <div className="h-full rounded-full bg-brand-500" style={{ width: `${pctOfTotal}%` }} />
+                <div className="overflow-x-auto">
+                  <div className="min-w-[480px] divide-y divide-surface-700">
+                    {data.top_clients.map((c, i) => {
+                      const pctOfTotal = data.revenue_total ? (c.total / data.revenue_total) * 100 : 0
+                      return (
+                        <div key={c.client_name} className="flex items-center gap-4 px-5 py-3 hover:bg-surface-700/30 transition-colors">
+                          <div className="w-6 h-6 rounded-full bg-surface-700 flex items-center justify-center text-slate-400 text-xs font-bold shrink-0">
+                            {i + 1}
                           </div>
-                          <span className="text-slate-400 text-xs w-8 text-right">{pctOfTotal.toFixed(0)}%</span>
-                          <span className="text-white text-sm font-semibold w-24 text-right">{fmt(c.total)}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white text-sm font-medium truncate">{c.client_name}</p>
+                            <p className="text-slate-500 text-xs">{c.quotes_count} orçamento{c.quotes_count !== 1 ? 's' : ''}</p>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <div className="w-24 h-1.5 bg-surface-600 rounded-full overflow-hidden">
+                              <div className="h-full rounded-full bg-brand-500" style={{ width: `${pctOfTotal}%` }} />
+                            </div>
+                            <span className="text-slate-400 text-xs w-8 text-right">{pctOfTotal.toFixed(0)}%</span>
+                            <span className="text-white text-sm font-semibold w-24 text-right">{fmt(c.total)}</span>
+                          </div>
                         </div>
-                      </div>
-                    )
-                  })}
+                      )
+                    })}
+                  </div>
                 </div>
               )}
             </div>
