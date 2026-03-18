@@ -465,16 +465,21 @@ export default function AdminUsers() {
             {/* Footer */}
             {detail && (
               <div className="shrink-0 border-t border-surface-600 p-4 space-y-2">
-                <button
-                  onClick={handleSaveEdit}
-                  disabled={editSaving || !editDirty}
-                  className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-all ${
-                    editDirty ? 'btn-primary' : 'bg-surface-700 text-slate-500 cursor-not-allowed'
-                  }`}
-                >
-                  {editSaving && <div className="w-4 h-4 border border-white border-t-transparent rounded-full animate-spin" />}
-                  {editSaving ? 'Salvando…' : 'Salvar alterações'}
-                </button>
+                {(() => {
+                  const canSave = editDirty || (showPwSection && newPw.length >= 6)
+                  return (
+                    <button
+                      onClick={handleSaveEdit}
+                      disabled={editSaving || !canSave}
+                      className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-all ${
+                        canSave ? 'btn-primary' : 'bg-surface-700 text-slate-500 cursor-not-allowed'
+                      }`}
+                    >
+                      {editSaving && <div className="w-4 h-4 border border-white border-t-transparent rounded-full animate-spin" />}
+                      {editSaving ? 'Salvando…' : 'Salvar alterações'}
+                    </button>
+                  )
+                })()}
                 <button
                   onClick={handleToggleActive}
                   disabled={actionLoading}

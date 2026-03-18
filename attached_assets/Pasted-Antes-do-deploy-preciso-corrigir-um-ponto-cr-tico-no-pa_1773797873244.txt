@@ -1,0 +1,109 @@
+Antes do deploy, preciso corrigir um ponto crítico no painel do MASTER_ADMIN e também levantar os acessos de teste existentes.
+
+Importante:
+- não refatorar o projeto inteiro
+- focar apenas nesse problema de gestão de usuários
+- pode corrigir bug real
+- no final quero validação funcional
+
+==================================================
+PARTE 1 — MASTER ADMIN: TROCA DE SENHA
+==================================================
+
+Hoje o painel do MASTER_ADMIN não está funcionando corretamente para troca de senha de contas.
+
+Problema observado:
+- existe área/fluxo para alterar senha
+- mas ao trocar a senha, não está sendo possível salvar corretamente as alterações
+- preciso que isso funcione de forma confiável
+
+Quero que você:
+1. audite o fluxo completo de alteração de senha no painel master
+2. identifique por que não está salvando
+3. corrija o problema
+4. valide ponta a ponta
+
+Verifique:
+- frontend do AdminUsers
+- modal/drawer de edição
+- payload enviado
+- endpoint backend correspondente
+- schema
+- service/repository
+- hash da senha
+- commit/persistência
+- resposta da API
+- feedback visual no frontend
+
+Comportamento esperado:
+- master_admin edita um usuário
+- informa nova senha
+- salva
+- senha é persistida corretamente
+- usuário consegue logar com a nova senha
+- se não informar nova senha, não deve sobrescrever a senha anterior
+
+==================================================
+PARTE 2 — VALIDAÇÃO DE EDIÇÃO DE USUÁRIOS
+==================================================
+
+Quero confirmar também que, no painel master:
+- editar nome funciona
+- editar e-mail funciona
+- editar role funciona
+- editar empresa vinculada funciona quando aplicável
+- ativar/desativar funciona
+- trocar senha funciona
+
+Se houver bug em qualquer um desses pontos, corrija.
+
+==================================================
+PARTE 3 — USUÁRIOS DE TESTE
+==================================================
+
+Preciso que você levante os acessos atualmente cadastrados no ambiente de desenvolvimento para eu testar.
+
+Quero que você me informe de forma objetiva:
+- nome
+- e-mail
+- role
+- empresa vinculada (se houver)
+- senha de teste, se conhecida/definida no seed ou criada por você nos testes
+
+Se a senha real não puder ser lida do banco por estar hasheada, tudo bem.
+Nesse caso, quero que você:
+1. identifique quais usuários de teste existem
+2. me diga quais senhas você mesmo definiu/criou durante os testes, se criou alguma
+3. se necessário, redefina senhas de teste claras para os usuários principais e me informe quais ficaram
+
+Usuários que quero priorizar para teste:
+- master_admin
+- company_admin
+- seller
+- installer
+
+Se precisar criar ou redefinir senhas de teste para esses perfis, pode fazer, mas:
+- documente exatamente o que fez
+- me informe os acessos finais
+
+==================================================
+PARTE 4 — ENTREGA FINAL
+==================================================
+
+Quero que você me entregue:
+
+1. diagnóstico do bug da troca de senha
+2. o que foi corrigido
+3. arquivos alterados
+4. validação funcional da troca de senha
+5. lista final de acessos de teste:
+   - nome
+   - email
+   - role
+   - empresa
+   - senha de teste
+
+Importante:
+- tratar isso como ajuste final pré-deploy
+- não abrir novas features
+- focar em corrigir e me entregar os acessos para teste
