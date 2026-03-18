@@ -119,3 +119,11 @@
   border-color: rgba(99, 102, 241, 0.35);
   box-shadow: 0 4px 20px rgba(99, 102, 241, 0.06);
 }
+
+/* ── Mobile utilities ────────────────────────────────────────────────────── */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Safe area insets for PWA / iOS notch */
+.safe-top    { padding-top: env(safe-area-inset-top); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }

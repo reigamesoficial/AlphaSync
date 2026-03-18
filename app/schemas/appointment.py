@@ -75,3 +75,12 @@ class AppointmentUpdate(BaseSchema):
 
 class AppointmentResponse(AppointmentBase, IDSchema, TimestampSchema):
     company_id: int
+
+
+class InstallerAppointmentResponse(AppointmentResponse):
+    """AppointmentResponse extended with denormalized client info for installer views."""
+    client_name: str | None = None
+    client_phone: str | None = None
+    client_address: str | None = None
+    has_warranty: bool = False
+    warranty_id: int | None = None

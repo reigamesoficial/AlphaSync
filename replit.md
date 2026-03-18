@@ -360,3 +360,53 @@ Master admin has `company_id = null` in JWT — cannot access tenant endpoints (
 - `DATABASE_URL` from Replit uses `postgresql://` scheme; config auto-converts to `postgresql+psycopg2://`.
 - `CORS_ORIGINS` env var is stored as plain string; `cors_origins_list` computed field parses it.
 - Frontend Vite proxies all `/api/*` requests to the backend on port 8000.
+
+## PWA + Mobile Installer + Warranty System (2026-03-18)
+
+### PWA — Web App Instalável
+- **`frontend/public/manifest.json`** (NEW): Web App Manifest com `display: standalone`, `theme_color: #6366f1`, ícones, shortcut para Minha Agenda
+- **`frontend/public/icons/`** (NEW): `icon-192.png`, `icon-512.png`, `apple-touch-icon.png`, `favicon-32.png` — gerados com PIL
+- **`frontend/index.html`**: Adicionado link para manifest, `theme-color`, `apple-mobile-web-app-capable`, `apple-touch-icon`, `viewport-fit=cover`
+- **`frontend/src/index.css`**: Utilitários `.no-scrollbar` e `.safe-top/.safe-bottom` para iOS PWA
+
+### Installer Mobile-First
+- **`frontend/src/components/layout/InstallerLayout.tsx`**: Reescrito com layout responsivo:
+  - Desktop (md+): sidebar lateral `w-60` (comportamento anterior preservado)
+  - Mobile (<md): header superior fixo + bottom navigation bar com nav links
+  - `safe-top/safe-bottom` para suporte a notch iOS
+- **`frontend/src/pages/installer/InstallerSchedule.tsx`**: Reescrito mobile-first:
+  - Interface `Appointment` extendida com `client_name`, `client_phone`, `client_address`, `has_warranty`, `warranty_id`
+  - Cards exibem nome do cliente, telefone clicável (tel:), endereço completo
+  - Botões de ação maiores (`py-3` em mobile) com ícones 5x5
+  - Filtros com `overflow-x-auto` + `no-scrollbar`
+  - Stats grid `grid-cols-3` com tamanhos responsivos
+  - Botão "Gerar Garantia" para atendimentos concluídos sem garantia
+  - Botão "Baixar Certificado" (download via fetch + blob com auth header) quando garantia existe
+
+### Sistema de Garantia — Backend
+- **`app/db/models.py`**: Modelo `Warranty` adicionado (tabela `warranties`):
+  - FK para `companies`, `appointments`, `clients`, `users`
+  - Campos: `client_name`, `client_phone`, `address_raw`, `service_description`, `warranty_period`, `warranty_covers`, `additional_notes`, `signature`, `sent_at`
+  - Relacionamento bidirecional com `Appointment` (`warranty: Warranty | None`)
+- **`app/schemas/appointment.py`**: `InstallerAppointmentResponse` extendendo `AppointmentResponse` com `client_name`, `client_phone`, `client_address`, `has_warranty`, `warranty_id`
+- **`app/schemas/warranty.py`** (NEW): `WarrantyConfigSchema`, `WarrantyCreate`, `WarrantyResponse`
+- **`app/services/warranty_service.py`** (NEW): Geração de garantia:
+  - `get_or_create_warranty()`: cria registro usando config padrão da empresa
+  - `generate_warranty_pdf()`: PDF profissional via ReportLab (A4, cabeçalho, dados do cliente, prazo destacado, assinatura, rodapé)
+- **`app/api/v1/endpoints/installer.py`**: Atualizado para usar `InstallerAppointmentResponse` (com client info) + 3 novos endpoints de garantia:
+  - `POST /installer/appointments/{id}/warranty` — gera (ou retorna existente) garantia para atendimento concluído
+  - `GET /installer/appointments/{id}/warranty` — busca garantia existente
+  - `GET /installer/appointments/{id}/warranty/pdf` — gera PDF e retorna como download (attachment)
+- **`migrations/versions/20260317_1700_add_warranties_table.py`** (NEW): Migration para tabela `warranties`
+
+### Configuração de Garantia — Admin
+- **`frontend/src/pages/Settings.tsx`**: Nova aba "Garantia":
+  - Tipo `Tab` expandido com `'garantia'`
+  - Estados `warrantyForm` + `savingWarranty`
+  - Carrega config atual de `extra_settings.warranty` ao abrir a aba
+  - Campos editáveis: descrição do serviço, prazo de garantia, cobertura, notas adicionais, assinatura
+  - `handleSaveWarranty()` → `PATCH /company/settings` salvando em `extra_settings.warranty`
+
+### DB
+- **17 tabelas** (era 16): tabela `warranties` adicionada
+- **91 rotas HTTP** (era 88): 3 novas rotas de garantia no installer

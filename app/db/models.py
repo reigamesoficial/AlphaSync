@@ -927,6 +927,12 @@ class Appointment(TimestampMixin, Base):
         remote_side=[id],
         foreign_keys=[parent_appointment_id],
     )
+    warranty: Mapped["Warranty | None"] = relationship(
+        "Warranty",
+        back_populates="appointment",
+        uselist=False,
+        passive_deletes=True,
+    )
 
 class PlatformSettings(TimestampMixin, Base):
     """Singleton table (always id=1) for global SaaS platform configuration."""
@@ -945,6 +951,55 @@ class PlatformSettings(TimestampMixin, Base):
     public_app_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     logo_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     extra_flags: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+
+
+class Warranty(TimestampMixin, Base):
+    """Certificado de garantia vinculado a um atendimento concluído."""
+
+    __tablename__ = "warranties"
+    __table_args__ = (
+        Index("ix_warranties_company", "company_id"),
+        Index("ix_warranties_appointment", "appointment_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    company_id: Mapped[int] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    appointment_id: Mapped[int] = mapped_column(
+        ForeignKey("appointments.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    client_id: Mapped[int] = mapped_column(
+        ForeignKey("clients.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    client_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    client_phone: Mapped[str] = mapped_column(String(30), nullable=False)
+    address_raw: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    service_description: Mapped[str] = mapped_column(Text, nullable=False)
+    warranty_period: Mapped[str] = mapped_column(String(100), nullable=False, default="12 meses")
+    warranty_covers: Mapped[str] = mapped_column(Text, nullable=False)
+    additional_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    signature: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    sent_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    appointment: Mapped["Appointment"] = relationship("Appointment", back_populates="warranty")
+    company: Mapped["Company"] = relationship("Company")
+    client: Mapped["Client"] = relationship("Client")
+    sent_by: Mapped["User | None"] = relationship("User", foreign_keys=[sent_by_user_id])
 
 
 class DomainDefinition(TimestampMixin, Base):

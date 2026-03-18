@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   Settings as SettingsIcon, Save, Bot, Palette, Globe,
   AlertCircle, CheckCircle, Shield, Eye, EyeOff, Plus, X,
-  CalendarDays, UserCheck, ChevronDown, ChevronUp, RotateCcw,
+  CalendarDays, UserCheck, ChevronDown, ChevronUp, RotateCcw, ShieldCheck,
 } from 'lucide-react'
 import Topbar from '../components/layout/Topbar'
 import { PageSpinner } from '../components/ui/Spinner'
@@ -31,7 +31,7 @@ const SLOT_OPTIONS = [
 const WEEKDAY_LABELS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 const TONE_OPTIONS = ['amigável', 'profissional', 'objetivo', 'técnico', 'descontraído']
 
-type Tab = 'empresa' | 'protection_network' | 'agendamento' | 'fluxo_bot'
+type Tab = 'empresa' | 'protection_network' | 'agendamento' | 'fluxo_bot' | 'garantia'
 
 interface SectionProps { title: string; icon: React.ReactNode; children: React.ReactNode }
 function Section({ title, icon, children }: SectionProps) {
@@ -122,6 +122,15 @@ export default function Settings() {
   const [flowForms, setFlowForms] = useState<Record<string, DomainBotMessages>>({})
   const [savingDomain, setSavingDomain] = useState<string | null>(null)
 
+  const [warrantyForm, setWarrantyForm] = useState({
+    service_description: '',
+    warranty_period: '12 meses',
+    warranty_covers: '',
+    additional_notes: '',
+    signature: '',
+  })
+  const [savingWarranty, setSavingWarranty] = useState(false)
+
   useEffect(() => {
     Promise.all([getCompanySettings(), getPNSettings()])
       .then(([s, pn]) => {
@@ -163,6 +172,19 @@ export default function Settings() {
           setFlowForms(forms)
         })
         .catch(() => showToast('error', 'Erro ao carregar configurações do fluxo.'))
+    } else if (tab === 'garantia') {
+      getCompanySettings()
+        .then(s => {
+          const wCfg = (s as any).extra_settings?.warranty ?? {}
+          setWarrantyForm({
+            service_description: wCfg.service_description ?? '',
+            warranty_period: wCfg.warranty_period ?? '12 meses',
+            warranty_covers: wCfg.warranty_covers ?? '',
+            additional_notes: wCfg.additional_notes ?? '',
+            signature: wCfg.signature ?? '',
+          })
+        })
+        .catch(() => showToast('error', 'Erro ao carregar configurações de garantia.'))
     }
   }, [tab])
 
@@ -252,6 +274,18 @@ export default function Settings() {
     }
   }
 
+  async function handleSaveWarranty() {
+    setSavingWarranty(true)
+    try {
+      await updateCompanySettings({ extra_settings: { warranty: warrantyForm } } as any)
+      showToast('success', 'Configurações de garantia salvas!')
+    } catch {
+      showToast('error', 'Erro ao salvar configurações de garantia.')
+    } finally {
+      setSavingWarranty(false)
+    }
+  }
+
   function field(key: keyof CompanySettings) {
     return {
       value: (form[key] as string) ?? '',
@@ -290,6 +324,7 @@ export default function Settings() {
     { key: 'protection_network', label: 'Protection Network' },
     { key: 'agendamento', label: 'Agendamento' },
     { key: 'fluxo_bot', label: 'Fluxo do Bot' },
+    { key: 'garantia', label: 'Garantia' },
   ]
 
   return (
@@ -783,6 +818,84 @@ export default function Settings() {
                   })}
                 </div>
               )}
+            </>
+          )}
+
+          {tab === 'garantia' && (
+            <>
+              <div className="card p-5">
+                <div className="flex items-center gap-2.5 mb-2">
+                  <div className="w-7 h-7 bg-emerald-500/15 rounded-lg flex items-center justify-center text-emerald-400">
+                    <ShieldCheck className="w-4 h-4" />
+                  </div>
+                  <h3 className="text-white font-semibold text-sm">Configuração da Garantia</h3>
+                </div>
+                <p className="text-slate-500 text-xs">
+                  Defina o modelo padrão de garantia emitido após a conclusão de cada atendimento.
+                  Nome e endereço do cliente são preenchidos automaticamente.
+                </p>
+              </div>
+
+              <Section title="Texto da Garantia" icon={<ShieldCheck className="w-4 h-4" />}>
+                <Field label="Descrição do serviço" hint="Descreva o serviço prestado conforme aparecerá no certificado.">
+                  <textarea
+                    className="input min-h-[80px] resize-none text-sm"
+                    placeholder="Ex: Instalação profissional de película de controle solar conforme especificações acordadas."
+                    value={warrantyForm.service_description}
+                    onChange={e => setWarrantyForm(f => ({ ...f, service_description: e.target.value }))}
+                  />
+                </Field>
+
+                <Field label="Prazo de garantia" hint="Período de cobertura. Ex: 12 meses, 2 anos.">
+                  <input
+                    className="input text-sm"
+                    placeholder="12 meses"
+                    value={warrantyForm.warranty_period}
+                    onChange={e => setWarrantyForm(f => ({ ...f, warranty_period: e.target.value }))}
+                  />
+                </Field>
+
+                <Field label="O que a garantia cobre" hint="Descreva os defeitos e situações cobertas pela garantia.">
+                  <textarea
+                    className="input min-h-[80px] resize-none text-sm"
+                    placeholder="Ex: Defeitos de instalação, descolamento e bolhas originadas do serviço prestado. Não cobre danos por terceiros ou uso inadequado."
+                    value={warrantyForm.warranty_covers}
+                    onChange={e => setWarrantyForm(f => ({ ...f, warranty_covers: e.target.value }))}
+                  />
+                </Field>
+
+                <Field label="Notas adicionais" hint="Texto complementar opcional (condições especiais, instruções de uso etc.).">
+                  <textarea
+                    className="input min-h-[60px] resize-none text-sm"
+                    placeholder="Opcional..."
+                    value={warrantyForm.additional_notes}
+                    onChange={e => setWarrantyForm(f => ({ ...f, additional_notes: e.target.value }))}
+                  />
+                </Field>
+
+                <Field label="Assinatura / Rodapé" hint="Nome ou assinatura final da empresa que aparece no rodapé do certificado.">
+                  <input
+                    className="input text-sm"
+                    placeholder="Ex: Equipe AlphaSync — www.alphasync.app"
+                    value={warrantyForm.signature}
+                    onChange={e => setWarrantyForm(f => ({ ...f, signature: e.target.value }))}
+                  />
+                </Field>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    onClick={handleSaveWarranty}
+                    disabled={savingWarranty}
+                    className="btn-primary flex items-center gap-2 px-5"
+                  >
+                    {savingWarranty
+                      ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      : <Save className="w-4 h-4" />
+                    }
+                    Salvar garantia
+                  </button>
+                </div>
+              </Section>
             </>
           )}
         </div>

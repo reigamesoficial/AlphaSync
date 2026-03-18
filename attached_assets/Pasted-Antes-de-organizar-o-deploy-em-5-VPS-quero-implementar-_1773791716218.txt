@@ -1,0 +1,209 @@
+Antes de organizar o deploy em 5 VPS, quero implementar uma frente importante de produto no AlphaSync:
+
+1. versão web instalável no celular
+2. foco mobile no painel do instalador
+3. envio de garantia ao cliente quando o serviço for finalizado
+4. configuração da garantia pelo admin da empresa / admin de vendas
+
+Importante:
+- não refatorar o projeto inteiro
+- preservar a arquitetura atual
+- preservar multiempresa
+- preservar roles e painéis já implementados
+- fazer em etapas pequenas
+- primeiro auditar o que já existe, depois implementar o que faltar
+
+==================================================
+OBJETIVO GERAL
+==================================================
+
+Quero que o AlphaSync funcione melhor no celular como uma aplicação web instalável, com foco especial no instalador.
+
+Além disso, quando o instalador concluir um serviço, o sistema deve poder gerar/enviar uma garantia ao cliente.
+
+Essa garantia deve ser configurável pela empresa, mas com alguns campos padrão obrigatórios.
+
+==================================================
+PARTE 1 — WEB APP INSTALÁVEL NO CELULAR
+==================================================
+
+Quero transformar o frontend em uma experiência melhor para celular, com comportamento de web app instalável.
+
+Objetivo:
+- permitir “instalar” o AlphaSync no celular como app web
+- melhorar usabilidade mobile
+- dar foco especial ao fluxo do instalador
+
+Quero que você avalie e implemente o que for necessário para:
+- manifest web app
+- ícones
+- comportamento instalável
+- experiência mobile adequada
+- abertura em tela cheia quando instalado, se aplicável
+- estrutura segura e compatível com o frontend atual
+
+Não precisa virar app nativo.
+Quero uma versão web instalável e funcional.
+
+==================================================
+PARTE 2 — FOCO MOBILE NO PAINEL DO INSTALADOR
+==================================================
+
+O instalador vai usar muito mais pelo celular do que desktop.
+
+Quero melhorar especialmente o painel do instalador para uso mobile.
+
+Requisitos:
+- tela da agenda muito bem adaptada ao celular
+- cards clicáveis e simples
+- detalhes do atendimento fáceis de abrir
+- botões grandes e claros para:
+  - iniciar atendimento
+  - concluir atendimento
+  - reagendar (se permitido)
+  - cancelar (se permitido)
+- informações mais importantes em destaque:
+  - nome do cliente
+  - endereço completo
+  - medidas
+  - horário
+  - observações
+  - tempo estimado de serviço
+
+Quero uma UX mobile-first para:
+- /installer
+- /installer/schedule
+- detalhe do atendimento do instalador
+
+==================================================
+PARTE 3 — GARANTIA DO SERVIÇO
+==================================================
+
+Quando o instalador finalizar um atendimento, quero ter a opção de enviar ao cliente a garantia do serviço.
+
+Fluxo desejado:
+1. instalador conclui o serviço
+2. o sistema pode:
+   - gerar a garantia
+   - enviar a garantia ao cliente
+   - ou deixar disponível para envio pelo painel
+
+Quero que você implemente a base completa disso.
+
+A garantia deve ter campos padrão:
+- nome do cliente
+- endereço
+- descrição do serviço
+- prazo de garantia
+- o que a garantia cobre
+
+Regra:
+- nome e endereço devem vir automaticamente do atendimento/cliente
+- os campos configuráveis pela empresa serão:
+  - descrição do serviço
+  - prazo de garantia
+  - o que a garantia cobre
+
+==================================================
+PARTE 4 — CONFIGURAÇÃO DA GARANTIA PELO ADMIN DA EMPRESA
+==================================================
+
+No painel do company_admin / admin de vendas, quero uma área para estruturar a garantia padrão da empresa.
+
+Essa área deve permitir configurar:
+- descrição padrão do serviço (editável)
+- prazo padrão de garantia
+- texto do que a garantia cobre
+- opcionalmente texto complementar
+- tom/assinatura final da empresa
+
+Campos obrigatórios padrão da garantia:
+- nome do cliente (automático)
+- endereço (automático)
+
+Campos configuráveis pela empresa:
+- descrição do serviço
+- prazo de garantia
+- o que a garantia cobre
+
+Essas configurações devem ficar salvas por empresa, respeitando multiempresa.
+
+Sugestão:
+salvar em company_settings.extra_settings
+ou em estrutura equivalente já usada para configs da empresa
+
+==================================================
+PARTE 5 — GERAÇÃO E ENVIO DA GARANTIA
+==================================================
+
+Quero que você avalie a melhor forma de entregar a garantia ao cliente.
+
+Pode ser:
+- PDF de garantia
+- documento HTML renderizado
+- modelo reutilizando parte da estrutura de PDF já existente
+
+O importante é:
+- ficar profissional
+- poder ser visualizado no painel
+- poder ser enviado ao cliente
+- ficar vinculado ao atendimento concluído
+
+Se fizer sentido, implementar:
+- endpoint para gerar garantia
+- endpoint para visualizar/baixar garantia
+- ação no painel do instalador ou admin para enviar garantia ao cliente
+
+==================================================
+PARTE 6 — REGRAS DE NEGÓCIO
+==================================================
+
+1. A garantia é vinculada ao atendimento concluído
+2. Deve respeitar a empresa do usuário logado
+3. Nenhuma empresa pode ver garantias de outra empresa
+4. O instalador não edita a estrutura padrão da garantia
+5. O company_admin/admin de vendas define o padrão da empresa
+6. O envio da garantia só acontece após conclusão do serviço
+7. Se não houver configuração customizada, usar um padrão seguro do sistema
+
+==================================================
+PARTE 7 — ENTREGA
+==================================================
+
+Quero que você trabalhe em etapas:
+
+ETAPA 1
+- auditar o que já existe hoje para:
+  - responsividade mobile
+  - instalador mobile
+  - PWA/web app instalável
+  - PDFs/documentos reutilizáveis
+  - estrutura de company settings para garantia
+
+ETAPA 2
+- implementar base de web app instalável
+- melhorar foco mobile no instalador
+
+ETAPA 3
+- implementar configuração da garantia por empresa
+
+ETAPA 4
+- implementar geração da garantia
+- integrar com conclusão do atendimento
+
+ETAPA 5
+- implementar ação de envio/visualização da garantia
+
+ETAPA 6
+- validar funcionalmente
+- mostrar:
+  - arquivos alterados
+  - endpoints criados/alterados
+  - páginas alteradas
+  - como a garantia funciona
+  - como ficou a experiência mobile
+
+Importante:
+- preservar o restante do sistema
+- não quebrar deploy
+- manter tudo pronto para produção
