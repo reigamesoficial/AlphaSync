@@ -159,11 +159,13 @@ def update_company_settings(
     db: Session = Depends(get_db),
 ):
     service = SettingsService(db)
-    return service.upsert_company_settings(
+    result = service.upsert_company_settings(
         tenant_company_id=tenant_company_id,
         current_user=current_user,
         payload=payload,
     )
+    db.commit()
+    return result
 
 
 def _extract_pn_settings(effective: dict[str, Any]) -> PNSettingsResponse:
@@ -227,6 +229,7 @@ def update_pn_settings(
         current_user=current_user,
         payload=settings_update,
     )
+    db.commit()
 
     effective = service.get_effective_extra_settings(
         tenant_company_id=tenant_company_id,

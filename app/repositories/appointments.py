@@ -25,6 +25,7 @@ class AppointmentsRepository(TenantRepository[Appointment]):
                 selectinload(Appointment.client),
                 selectinload(Appointment.assigned_installer),
                 selectinload(Appointment.quote),
+                selectinload(Appointment.warranty),
             )
         )
         return self.db.scalar(stmt)
@@ -48,6 +49,7 @@ class AppointmentsRepository(TenantRepository[Appointment]):
                 selectinload(Appointment.client),
                 selectinload(Appointment.assigned_installer),
                 selectinload(Appointment.quote),
+                selectinload(Appointment.warranty),
             )
         )
 

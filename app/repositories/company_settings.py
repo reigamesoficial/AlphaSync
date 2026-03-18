@@ -4,6 +4,7 @@ from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.db.models import CompanySettings
 from app.repositories.base import BaseRepository
@@ -97,6 +98,7 @@ class CompanySettingsRepository(BaseRepository[CompanySettings]):
             settings_obj.timezone = timezone
         if extra_settings is not None:
             settings_obj.extra_settings = extra_settings
+            flag_modified(settings_obj, "extra_settings")
 
         self.db.flush()
         self.db.refresh(settings_obj)

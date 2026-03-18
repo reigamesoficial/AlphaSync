@@ -937,6 +937,13 @@ class Appointment(TimestampMixin, Base):
         passive_deletes=True,
     )
 
+    @property
+    def has_warranty(self) -> bool:
+        try:
+            return self.warranty is not None
+        except Exception:
+            return False
+
 class PlatformSettings(TimestampMixin, Base):
     """Singleton table (always id=1) for global SaaS platform configuration."""
 

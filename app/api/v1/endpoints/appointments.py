@@ -14,9 +14,10 @@ from app.core.security import (
 )
 from app.core.tenancy import get_tenant_company_id
 from app.db.connection import get_db
-from app.db.models import Appointment, AppointmentStatus, CompanySettings, User, UserRole
+from app.db.models import Appointment, AppointmentStatus, CompanySettings, User, UserRole, Warranty
 from app.repositories.appointments import AppointmentsRepository
 from app.schemas.appointment import AppointmentCreate, AppointmentResponse, AppointmentUpdate
+from app.schemas.warranty import WarrantyResponse
 
 router = APIRouter(prefix="/appointments", tags=["Appointments"])
 
@@ -54,8 +55,9 @@ def _validate_appointment_times(
     exclude_id: int | None = None,
 ) -> None:
     """Raise HTTPException for past dates or installer conflicts."""
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-    if start_at < now:
+    now = datetime.now(timezone.utc)
+    start_cmp = start_at if start_at.tzinfo is not None else start_at.replace(tzinfo=timezone.utc)
+    if start_cmp < now:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Não é possível agendar em uma data/hora passada.",
@@ -269,3 +271,40 @@ def delete_appointment(
     db.delete(obj)
     db.commit()
     return Response(status_code=204)
+
+
+# ─── Admin warranty read endpoint ──────────────────────────────────────────────
+
+@router.get("/{appointment_id}/warranty", response_model=WarrantyResponse)
+def get_appointment_warranty(
+    appointment_id: int,
+    tenant_company_id: int = Depends(get_tenant_company_id),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+) -> WarrantyResponse:
+    """Retorna a garantia de um atendimento (acessível por admin e instalador da empresa)."""
+    repo = AppointmentsRepository(db)
+    obj = repo.get_full_by_id_and_company(appointment_id, tenant_company_id)
+    if not obj:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agendamento não encontrado.")
+    w = db.query(Warranty).filter(Warranty.appointment_id == appointment_id, Warranty.company_id == tenant_company_id).first()
+    if not w:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Garantia não encontrada para este atendimento.")
+    return WarrantyResponse(
+        id=w.id,
+        created_at=w.created_at,
+        updated_at=w.updated_at,
+        company_id=w.company_id,
+        appointment_id=w.appointment_id,
+        client_id=w.client_id,
+        client_name=w.client_name,
+        client_phone=w.client_phone,
+        address_raw=w.address_raw,
+        service_description=w.service_description,
+        warranty_period=w.warranty_period,
+        warranty_covers=w.warranty_covers,
+        additional_notes=w.additional_notes,
+        signature=w.signature,
+        sent_at=w.sent_at,
+        sent_by_user_id=w.sent_by_user_id,
+    )
