@@ -135,7 +135,7 @@ export default function Schedule() {
   }, [load])
 
   useEffect(() => {
-    api.get<Client[]>('/clients').then(r => setClients(r.data)).catch(() => {})
+    api.get<{ items: Client[] }>('/clients').then(r => setClients(r.data.items ?? [])).catch(() => {})
     listInstallers().then(setInstallers).catch(() => {})
   }, [])
 
