@@ -1,0 +1,56 @@
+Entregue — 5 frentes completas
+ETAPA 2 — Web App Instalável (PWA)
+Arquivos criados/alterados:
+
+frontend/public/manifest.json — manifest completo (nome, ícones, display standalone, atalho para Agenda)
+frontend/public/icons/ — ícones gerados (192px, 512px, 180px apple, 32px favicon)
+frontend/index.html — meta tags PWA adicionadas: theme-color, apple-mobile-web-app-capable, link para manifest, viewport-fit=cover
+Resultado: O AlphaSync agora pode ser instalado no celular como app — aparece a opção "Adicionar à tela inicial" no Chrome/Safari. Ao abrir, roda em tela cheia sem barra do navegador.
+
+ETAPA 2 — Mobile-first no painel do Instalador
+Arquivos:
+
+InstallerLayout.tsx — Totalmente reescrito:
+Mobile: header fixo no topo + barra de navegação inferior (padrão app nativo)
+Desktop: sidebar lateral preservada (sem regressão)
+Suporte a notch iOS (safe-area-inset)
+InstallerSchedule.tsx — Mobile-first completo:
+Nome do cliente em destaque no card
+Telefone clicável (tel:) para ligar direto
+Endereço completo no detalhe
+Botões de ação grandes (py-3) fáceis de tocar
+Filtros roláveis horizontalmente sem scrollbar visível
+Stats responsivas em mobile
+ETAPA 3 — Configuração da Garantia (admin de empresa)
+Arquivo: Settings.tsx — nova aba "Garantia" com:
+
+Descrição padrão do serviço
+Prazo de garantia (ex.: "12 meses")
+O que a garantia cobre
+Notas adicionais (opcional)
+Assinatura/rodapé da empresa
+Salvo em company_settings.extra_settings.warranty — isolado por empresa.
+
+ETAPA 4 — Geração da Garantia (backend)
+Novos arquivos:
+
+app/db/models.py — modelo Warranty (tabela warranties, FK para appointment + client)
+app/schemas/warranty.py — schemas Pydantic
+app/services/warranty_service.py — lógica de criação + PDF ReportLab profissional (A4, dados do cliente, prazo em destaque verde, cobertura, assinatura)
+Migration 20260317_1700_add_warranties_table.py
+Novos endpoints:
+
+Método	Endpoint	Ação
+POST	/installer/appointments/{id}/warranty	Gera garantia (usa config da empresa)
+GET	/installer/appointments/{id}/warranty	Consulta garantia existente
+GET	/installer/appointments/{id}/warranty/pdf	Baixa PDF profissional
+ETAPA 5 — Fluxo no painel do Instalador
+Após concluir um atendimento, o instalador vê no card expandido:
+
+✅ Botão "Gerar Garantia" (verde, ícone escudo)
+Após gerado: botão "Baixar Certificado de Garantia" (download automático do PDF com autenticação)
+Números após implementação
+17 tabelas no banco (era 16)
+91 rotas HTTP (era 88)
+Build TypeScript: zero erros
+Backend startup: 92ms
