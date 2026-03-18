@@ -1,0 +1,138 @@
+# =============================================================================
+# AlphaSync — VPS 5 (STAGING)
+# Stack completa de homologação: app + frontend + db + redis + worker
+# Espelha produção em VPS única para validação antes de subir pro ar.
+#
+# Diferenças em relação à produção:
+#   - APP_ENV=staging (não produção)
+#   - Banco de dados separado (alphasync_staging)
+#   - Porta do painel: 8080 (para não conflitar com outros serviços)
+#   - Sem SSL (usar ngrok ou tunnel externo para testes com webhook)
+#
+# Subir: docker compose up -d
+# Reset total: docker compose down -v && docker compose up -d
+# =============================================================================
+
+services:
+  # ── PostgreSQL ───────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: alphasync_staging_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-alphasync_staging}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-staging_password}
+      POSTGRES_DB: ${POSTGRES_DB:-alphasync_staging}
+    volumes:
+      - staging_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-alphasync_staging}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - staging
+
+  # ── Redis ─────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: alphasync_staging_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - staging_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - staging
+
+  # ── Backend ───────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: runtime
+    image: alphasync-backend:staging
+    container_name: alphasync_staging_app
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-alphasync_staging}:${POSTGRES_PASSWORD:-staging_password}@postgres:5432/${POSTGRES_DB:-alphasync_staging}
+      REDIS_URL: redis://redis:6379/0
+      ENABLE_SCHEDULER: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - staging_storage:/app/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - staging
+
+  # ── Worker ────────────────────────────────────────────────────────────────
+  worker:
+    image: alphasync-backend:staging
+    container_name: alphasync_staging_worker
+    restart: unless-stopped
+    command: ["python", "-m", "app.worker"]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-alphasync_staging}:${POSTGRES_PASSWORD:-staging_password}@postgres:5432/${POSTGRES_DB:-alphasync_staging}
+      REDIS_URL: redis://redis:6379/0
+      ENABLE_SCHEDULER: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - staging
+
+  # ── Frontend ─────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ""
+    image: alphasync-frontend:staging
+    container_name: alphasync_staging_frontend
+    restart: unless-stopped
+    networks:
+      - staging
+
+  # ── Nginx ─────────────────────────────────────────────────────────────────
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: alphasync_staging_nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - staging
+
+volumes:
+  staging_postgres_data:
+  staging_redis_data:
+  staging_storage:
+
+networks:
+  staging:
+    driver: bridge

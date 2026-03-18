@@ -1,0 +1,45 @@
+# =============================================================================
+# AlphaSync — VPS 1 (EDGE)
+# Nginx: SSL + frontend estático + proxy reverso para VPS 2
+#
+# Pré-requisitos:
+#   1. Build do frontend: docker build --build-arg VITE_API_URL=/api -t alphasync-frontend ./frontend
+#      Copie o /usr/share/nginx/html do container para ./html/
+#   2. Certificados SSL em ./certs/fullchain.pem e ./certs/privkey.pem
+#   3. Substitua APP_VPS2_HOST e YOUR_DOMAIN no nginx.conf
+#
+# Subir: docker compose up -d
+# =============================================================================
+
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: alphasync_edge
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./html:/usr/share/nginx/html:ro
+      - ./certs:/etc/nginx/certs:ro
+      - certbot_www:/var/www/certbot:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Certbot para renovação automática de SSL (Let's Encrypt)
+  certbot:
+    image: certbot/certbot:latest
+    container_name: alphasync_certbot
+    volumes:
+      - ./certs:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --quiet; sleep 12h & wait $${!}; done'"
+    restart: unless-stopped
+
+volumes:
+  certbot_www:

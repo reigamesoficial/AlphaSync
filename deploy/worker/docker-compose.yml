@@ -1,0 +1,73 @@
+# =============================================================================
+# AlphaSync — VPS 4 (WORKER)
+# Redis + Worker standalone (scheduler de lembretes)
+#
+# O worker roda o scheduler de tarefas periódicas como processo isolado.
+# A VPS 2 (APP) deve ter ENABLE_SCHEDULER=false para evitar duplicidade.
+#
+# Pré-requisitos:
+#   1. Copiar o repositório para esta VPS (apenas para build do worker)
+#   2. Criar .env a partir de .env.example
+#
+# Subir: docker compose up -d
+# =============================================================================
+
+services:
+  # ── Redis ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: alphasync_redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --requirepass ${REDIS_PASSWORD}
+      --bind 0.0.0.0
+    # SEGURANÇA: porta exposta apenas para IPs privados via firewall
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── Worker (scheduler AlphaSync) ───────────────────────────────────────────
+  worker:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: runtime
+    image: alphasync-backend:latest
+    container_name: alphasync_worker
+    restart: unless-stopped
+    command: ["python", "-m", "app.worker"]
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+volumes:
+  redis_data:
+    driver: local

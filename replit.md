@@ -409,4 +409,24 @@ Master admin has `company_id = null` in JWT — cannot access tenant endpoints (
 
 ### DB
 - **17 tabelas** (era 16): tabela `warranties` adicionada
-- **91 rotas HTTP** (era 88): 3 novas rotas de garantia no installer
+- **92 rotas HTTP** (era 88): rotas de garantia + admin
+
+## Deploy 5-VPS (2026-03-18)
+
+### Arquitetura
+- **VPS 1 (EDGE):** nginx + SSL + Frontend React SPA (proxy para VPS 2)
+- **VPS 2 (APP):** FastAPI + Gunicorn; `ENABLE_SCHEDULER=false`
+- **VPS 3 (DATABASE):** PostgreSQL 16 + backups cron
+- **VPS 4 (WORKER):** Redis 7 + `python -m app.worker` (scheduler de lembretes)
+- **VPS 5 (STAGING):** Stack completa de homologação (porta 8080)
+
+### Novos Arquivos
+- **`app/main.py`**: Startup/shutdown do scheduler agora condicional — `if settings.enable_scheduler:`
+- **`app/core/config.py`**: Campo `enable_scheduler: bool = True` (lê env `ENABLE_SCHEDULER`)
+- **`app/worker.py`**: Processo standalone do scheduler — handle SIGTERM/SIGINT, logging JSON em produção
+- **`deploy/edge/`**: `docker-compose.yml`, `nginx.conf` (SSL, rate-limiting, proxy), `.env.example`
+- **`deploy/app/`**: `docker-compose.yml`, `.env.example`
+- **`deploy/db/`**: `docker-compose.yml`, `.env.example`, `backup.sh` (backup + retenção 7 dias)
+- **`deploy/worker/`**: `docker-compose.yml`, `.env.example` (Redis + worker com `ENABLE_SCHEDULER=true`)
+- **`deploy/staging/`**: `docker-compose.yml`, `nginx.conf`, `.env.example` (all-in-one)
+- **`DEPLOY_5_VPS.md`**: Guia completo de deploy com checklist final

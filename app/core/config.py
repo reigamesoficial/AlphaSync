@@ -125,6 +125,13 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
 
     # ============================================================
+    # SCHEDULER — habilitar/desabilitar scheduler interno de tarefas
+    # Em deploy distribuído (5 VPS): false no APP, true apenas no WORKER
+    # Em deploy single-host: true (padrão)
+    # ============================================================
+    enable_scheduler: bool = True
+
+    # ============================================================
     # SEED (primeiro admin — só usado pelo script scripts/seed_admin.py)
     # ============================================================
     seed_admin_email: str = "admin@alphasync.app"

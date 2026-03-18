@@ -1,0 +1,46 @@
+# =============================================================================
+# AlphaSync — VPS 2 (APP)
+# FastAPI + Gunicorn/Uvicorn
+# Conecta em: PostgreSQL (VPS 3) e Redis (VPS 4)
+# Scheduler DESABILITADO aqui — roda apenas na VPS 4 (WORKER)
+#
+# Pré-requisitos:
+#   1. Copiar o repositório para esta VPS
+#   2. Criar .env a partir de .env.example
+#   3. Rodar migrations: docker compose run --rm backend alembic upgrade head
+#   4. Rodar seed (primeira vez): docker compose run --rm backend python scripts/seed_admin.py
+#
+# Subir: docker compose up -d
+# =============================================================================
+
+services:
+  backend:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: runtime
+    image: alphasync-backend:latest
+    container_name: alphasync_app
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - storage_data:/app/storage
+      - logs_data:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+volumes:
+  storage_data:
+  logs_data:

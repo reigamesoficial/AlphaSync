@@ -1,0 +1,254 @@
+Agora quero preparar o AlphaSync para deploy distribuído em 5 VPS, mantendo a arquitetura atual e sem abrir novas features.
+
+Importante:
+- não refatorar o produto
+- não mexer em regras de negócio
+- não alterar fluxos do bot
+- não criar funcionalidades novas
+- foco total em organização de infraestrutura, runtime, envs, documentação e deploy real
+
+==================================================
+ARQUITETURA ALVO — 5 VPS
+==================================================
+
+VPS 1 — EDGE
+Função:
+- nginx
+- SSL
+- frontend estático
+- proxy reverso
+
+VPS 2 — APP
+Função:
+- backend FastAPI
+- Gunicorn/Uvicorn
+- APIs
+- webhook WhatsApp
+- PDFs
+- IA
+- painel
+- bot
+
+VPS 3 — DATABASE
+Função:
+- PostgreSQL
+
+VPS 4 — WORKER
+Função:
+- Redis
+- scheduler
+- reminders
+- workers/jobs auxiliares
+
+VPS 5 — STAGING
+Função:
+- ambiente completo de homologação
+
+==================================================
+OBJETIVO
+==================================================
+
+Quero que você deixe o projeto pronto para ser deployado nessas 5 VPS separadas.
+
+Hoje o projeto já está pronto para produção em Docker, mas agora preciso separar corretamente o deploy por papel de servidor.
+
+==================================================
+ETAPA 1 — AUDITORIA DA ESTRUTURA ATUAL
+==================================================
+
+Primeiro, audite o estado atual do projeto para deploy distribuído.
+
+Verifique:
+- Dockerfiles existentes
+- docker-compose
+- nginx
+- gunicorn
+- scheduler
+- Redis
+- frontend build
+- banco
+- migrations
+- healthchecks
+- envs
+- serviços que hoje ainda estão acoplados
+
+Depois explique objetivamente:
+- o que hoje já serve para 5 VPS
+- o que precisa ser separado
+- o que precisa ser ajustado
+
+==================================================
+ETAPA 2 — ESTRUTURA DE DEPLOY POR VPS
+==================================================
+
+Quero uma estrutura clara no repositório para deploy distribuído.
+
+Pode ser algo como:
+- deploy/edge
+- deploy/app
+- deploy/db
+- deploy/worker
+- deploy/staging
+
+Ou estrutura equivalente.
+
+Para cada VPS, quero:
+- compose específico ou stack específica
+- env template específico
+- README curto ou instrução clara
+- portas esperadas
+- dependências entre serviços
+
+==================================================
+ETAPA 3 — VPS 1 (EDGE)
+==================================================
+
+Preparar tudo para a VPS 1:
+
+- nginx
+- frontend buildado
+- proxy para a VPS 2
+- pronto para domínio e SSL
+
+Quero:
+- configuração limpa do nginx para arquitetura distribuída
+- frontend servido corretamente
+- /api apontando para a VPS 2
+- documentação das variáveis e portas
+- preparação para app.seudominio.com e api.seudominio.com, se fizer sentido
+
+==================================================
+ETAPA 4 — VPS 2 (APP)
+==================================================
+
+Preparar tudo para a VPS 2:
+
+- backend FastAPI
+- Gunicorn/Uvicorn
+- conexão com PostgreSQL na VPS 3
+- conexão com Redis na VPS 4
+
+Quero:
+- compose/env do app
+- runtime limpo
+- healthchecks
+- migrations seguras
+- configuração para não rodar scheduler/reminder duplicado aqui, se isso for responsabilidade da VPS 4
+
+==================================================
+ETAPA 5 — VPS 3 (DATABASE)
+==================================================
+
+Preparar a VPS do PostgreSQL:
+
+- compose específico
+- env específico
+- volume persistente
+- instruções de backup
+- instruções de restore
+- orientação de firewall/portas
+- não deixar o banco exposto publicamente
+
+==================================================
+ETAPA 6 — VPS 4 (WORKER)
+==================================================
+
+Preparar a VPS do worker:
+
+- Redis
+- scheduler
+- reminders
+- processos auxiliares
+
+Muito importante:
+quero que você revise a arquitetura atual e garanta que o scheduler/reminders rodem aqui, e não em múltiplas instâncias da aplicação.
+
+Se hoje existe thread/scheduler acoplado ao app principal:
+- reorganize para o modo correto para a VPS worker
+- sem quebrar o funcionamento atual
+- evitando duplicidade de execução
+
+Quero:
+- compose/env do worker
+- documentação clara
+- separação correta entre app e worker
+
+==================================================
+ETAPA 7 — VPS 5 (STAGING)
+==================================================
+
+Preparar uma stack de staging completa:
+- app
+- frontend
+- db de teste
+- redis
+- worker
+
+Objetivo:
+- homologação parecida com produção
+- sem misturar dados com produção
+- fácil de subir e resetar
+
+==================================================
+ETAPA 8 — ENVS E SEGURANÇA
+==================================================
+
+Quero templates de env separados por VPS.
+
+Exemplos:
+- .env.edge.example
+- .env.app.example
+- .env.db.example
+- .env.worker.example
+- .env.staging.example
+
+Documente:
+- quais portas ficam públicas
+- quais ficam privadas
+- o que deve ser protegido por firewall
+- o que só deve aceitar tráfego interno entre VPS
+
+==================================================
+ETAPA 9 — DOCUMENTAÇÃO FINAL
+==================================================
+
+Criar documentação prática para deploy em 5 VPS.
+
+Quero um documento como:
+- DEPLOY_5_VPS.md
+
+Com:
+1. ordem correta de subida
+2. o que sobe em cada VPS
+3. como configurar envs
+4. como rodar migrations
+5. como rodar seed_admin
+6. como testar health
+7. como testar comunicação entre VPS
+8. como configurar domínio
+9. como configurar SSL
+10. como validar produção
+11. troubleshooting básico
+
+==================================================
+ETAPA 10 — ENTREGA FINAL
+==================================================
+
+Ao final, quero:
+
+1. lista de arquivos criados/alterados
+2. estrutura final de deploy
+3. papel de cada VPS
+4. onde fica o frontend
+5. onde fica o backend
+6. onde fica o banco
+7. onde fica o worker/scheduler/reminders
+8. onde fica staging
+9. status final:
+   - pronto para deploy em 5 VPS
+   - ou o que ainda falta
+
+Importante:
+- tratar isso como preparação final de infraestrutura
+- preservar o sistema atual
+- foco total em deploy distribuído real
