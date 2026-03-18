@@ -1,0 +1,176 @@
+Quero uma validação final completa das últimas implementações do AlphaSync antes do deploy.
+
+Importante:
+- NÃO criar novas features
+- NÃO refatorar o projeto inteiro
+- NÃO alterar arquitetura sem necessidade
+- foco total em teste, validação, consistência e possíveis ajustes finos
+- se encontrar bug real, pode corrigir
+- se encontrar risco, documente claramente
+
+Contexto:
+As últimas implementações incluíram:
+- PWA instalável
+- foco mobile-first no painel do instalador
+- geração de garantia por atendimento
+- configuração de garantia por empresa
+- download/visualização de garantia
+- agenda e fluxo de atendimento já existentes
+- CRM, financeiro, bot, PDF, reminders, painéis por role, domínios, etc.
+
+Como ainda está tudo em desenvolvimento no Replit e não consigo validar pelo celular de forma real, quero que você faça uma validação pré-deploy o mais completa possível.
+
+==================================================
+OBJETIVO
+==================================================
+
+Validar se essas implementações estão realmente prontas para produção e se estão em conformidade com o restante do sistema.
+
+Quero uma auditoria + testes funcionais + correção de bug real, se necessário.
+
+==================================================
+PARTE 1 — PWA / WEB APP INSTALÁVEL
+==================================================
+
+Valide a implementação do PWA/web app instalável.
+
+Verifique:
+1. se o manifest.json está correto
+2. se os ícones existem e estão válidos
+3. se o app pode ser instalado corretamente
+4. se as meta tags do index.html estão adequadas
+5. se o comportamento standalone está coerente
+6. se há algum problema de compatibilidade óbvio com Android / iPhone
+7. se falta algo importante para uma experiência PWA minimamente correta
+
+Quero um diagnóstico claro:
+- OK / PARCIAL / PROBLEMA
+- o que está bom
+- o que ainda falta
+- se houver bug, corrija
+
+==================================================
+PARTE 2 — PAINEL MOBILE DO INSTALADOR
+==================================================
+
+Valide a experiência mobile-first do instalador.
+
+Verifique:
+1. InstallerLayout
+2. InstallerSchedule
+3. navegação mobile
+4. barra inferior
+5. header fixo
+6. safe-area / notch
+7. botões de ação
+8. tamanho de toque
+9. legibilidade dos cards
+10. funcionamento do tel:
+11. responsividade dos detalhes do atendimento
+
+Quero confirmar se está aceitável para uso real em celular.
+
+Se houver quebra visual ou problema relevante, corrija.
+
+==================================================
+PARTE 3 — GARANTIA
+==================================================
+
+Valide a funcionalidade completa da garantia.
+
+Verifique:
+1. company_settings.extra_settings.warranty está sendo lido corretamente
+2. geração da Warranty funciona corretamente
+3. vínculo com appointment e client está correto
+4. PDF de garantia abre corretamente
+5. dados automáticos estão certos:
+   - nome do cliente
+   - endereço
+6. dados configuráveis estão corretos:
+   - descrição do serviço
+   - prazo
+   - cobertura
+   - notas
+   - assinatura
+7. multiempresa está respeitado
+8. instalador só gera garantia do que é da empresa dele
+9. nenhuma empresa consegue acessar garantia de outra
+
+Se houver bug, corrija.
+
+==================================================
+PARTE 4 — PONTOS DE ATENÇÃO ADICIONAIS
+==================================================
+
+Quero que você também valide estes pontos importantes sugeridos:
+
+1. A garantia também deve poder ser:
+- visualizada pelo admin da empresa
+- reenviada depois ao cliente
+- listada no histórico do atendimento/conversa
+
+Audite se isso já existe.
+Se não existir, não precisa implementar tudo do zero agora, mas:
+- diga claramente o que existe
+- diga o que não existe
+- e, se faltar algo pequeno e rápido, implemente
+
+2. No painel/admin da empresa:
+- verificar se a garantia pode ser consultada depois
+- verificar se o atendimento concluído mostra vínculo com a garantia
+- verificar se o histórico operacional está coerente
+
+3. No fluxo geral:
+- confirmar se conclusão do atendimento → geração de garantia → download do PDF
+  está fluindo sem inconsistência
+
+==================================================
+PARTE 5 — TESTE FUNCIONAL COMPLETO
+==================================================
+
+Quero que você teste ponta a ponta, dentro do que for possível no Replit:
+
+1. login como company_admin
+2. abrir settings e configurar garantia
+3. login como installer
+4. abrir atendimento
+5. concluir atendimento
+6. gerar garantia
+7. baixar PDF
+8. verificar se os dados estão corretos
+9. verificar se o admin consegue ver a garantia depois
+10. verificar se o sistema continua íntegro
+
+==================================================
+PARTE 6 — ENTREGA FINAL
+==================================================
+
+Quero um relatório final com:
+
+1. PWA
+- status: OK / PARCIAL / PROBLEMA
+- explicação
+
+2. Painel mobile do instalador
+- status: OK / PARCIAL / PROBLEMA
+- explicação
+
+3. Garantia
+- status: OK / PARCIAL / PROBLEMA
+- explicação
+
+4. Pontos adicionais
+- o que já existe
+- o que falta
+- o que foi corrigido
+
+5. Lista de arquivos alterados, se houver correção
+
+6. Conclusão final:
+- pronto para deploy
+- ou o que ainda falta ajustar
+
+Importante:
+- trate isso como validação final pré-deploy
+- corrija apenas bugs e lacunas pequenas encontradas
+- não abra novas frentes grandes

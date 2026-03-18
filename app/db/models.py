@@ -115,10 +115,13 @@ class QuoteItemStatus(str, PyEnum):
 
 class AppointmentStatus(str, PyEnum):
     SCHEDULED = "scheduled"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
     CONFIRMED = "confirmed"
-    CANCELLED = "cancelled"
     DONE = "done"
     RESCHEDULED = "rescheduled"
+    CANCELLED = "cancelled"
+    ABANDONED = "abandoned"
 
 
 class ReminderStatus(str, PyEnum):
