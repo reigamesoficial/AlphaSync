@@ -316,28 +316,77 @@ def return_conversation_to_bot(
     conv_obj.bot_step = "schedule_ask"
     db.add(conv_obj)
 
+    access_token = company.settings.whatsapp_access_token if company.settings else None
+    phone_id = company.whatsapp_phone_number_id
+    to_phone = conv_obj.phone
+
+    sent_pdf = False
     sent_wa = False
-    try:
-        access_token = company.settings.whatsapp_access_token if company.settings else None
-        phone_id = company.whatsapp_phone_number_id
-        if access_token and phone_id and conv_obj.phone:
-            from app.services.whatsapp_service import WhatsAppService
-            WhatsAppService().send_text(
+
+    if access_token and phone_id and to_phone:
+        from app.services.whatsapp_service import WhatsAppService
+        from app.repositories.quotes import QuotesRepository
+        from app.services.conversation_service import ConversationService
+
+        wa = WhatsAppService()
+
+        try:
+            quotes_repo = QuotesRepository(db)
+            quote = quotes_repo.get_latest_confirmed_for_conversation(conversation_id, company_id)
+            if quote and quote.pdf_url:
+                wa.send_document(
+                    access_token=access_token,
+                    phone_number_id=phone_id,
+                    to=to_phone,
+                    document_url=quote.pdf_url,
+                    filename=f"orcamento_{quote.code or quote.id}.pdf",
+                    caption="📄 Segue o PDF do seu orçamento!",
+                )
+                sent_pdf = True
+            elif quote:
+                svc = ConversationService(db)
+                svc._try_send_quote_pdf(
+                    company=company,
+                    quote=quote,
+                    phone_number_id=phone_id,
+                    to_phone=to_phone,
+                )
+                sent_pdf = True
+        except Exception:
+            pass
+
+        try:
+            wa.send_buttons(
                 access_token=access_token,
                 phone_number_id=phone_id,
-                to=conv_obj.phone,
-                body=(
-                    "Olá! Seu orçamento já está pronto 😊\n\n"
-                    "Deseja agendar a instalação agora? Responda *Sim* para continuar."
-                ),
+                to=to_phone,
+                body="Olá! Seu orçamento já está pronto 😊\n\nDeseja agendar a instalação agora?",
+                buttons=[
+                    {"id": "schedule_yes", "title": "Sim, agendar agora"},
+                    {"id": "schedule_later", "title": "Prefiro depois"},
+                ],
             )
             sent_wa = True
-    except Exception:
-        pass
+        except Exception:
+            try:
+                wa.send_text(
+                    access_token=access_token,
+                    phone_number_id=phone_id,
+                    to=to_phone,
+                    body=(
+                        "Olá! Seu orçamento já está pronto 😊\n\n"
+                        "Deseja agendar a instalação agora? Responda *Sim* para continuar."
+                    ),
+                )
+                sent_wa = True
+            except Exception:
+                pass
 
     db.commit()
 
     msg = "Conversa retornada ao bot com sucesso."
+    if sent_pdf:
+        msg += " PDF enviado ao cliente."
     if sent_wa:
         msg += " Cliente notificado via WhatsApp."
     return ReturnToBotResponse(ok=True, message=msg)

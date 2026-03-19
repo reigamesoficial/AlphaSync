@@ -1,0 +1,84 @@
+Preciso que você revise o fluxo REAL da AlphaSync com base no comportamento em produção, e não apenas na intenção da implementação.
+
+IMPORTANTE:
+Lembre do fluxo correto do projeto AlphaSync que já definimos nas análises arquiteturais e no projeto detalhado:
+
+FLUXO CORRETO
+1. Cliente conversa com o bot no WhatsApp
+2. Se o endereço não for encontrado e ele não tiver medidas, o bot NÃO deve gerar/enviar orçamento vazio ou preliminar para o cliente
+3. Nesse caso, o bot deve encaminhar para o vendedor/especialista
+4. O vendedor gera o orçamento manualmente pelo botão de orçamento na tela do cliente no painel
+5. Após o vendedor gerar/confirmar o orçamento, o sistema deve:
+   - enviar o PDF correto do orçamento ao cliente
+   - devolver o fluxo para o bot
+   - o bot perguntar se deseja agendar
+   - se o cliente responder sim, abrir lista interativa de dias
+   - depois lista interativa de horários
+   - concluir agendamento
+
+PROBLEMA ATUAL OBSERVADO
+Hoje está acontecendo o seguinte:
+- quando o cliente responde que NÃO tem medidas, o bot está seguindo por um caminho incorreto
+- chegou a perguntar cor, mas isso resultou em um orçamento vazio/preliminar sendo enviado ao cliente
+- isso está errado para a lógica da AlphaSync
+- o correto é passar para o vendedor gerar o orçamento no painel
+- depois disso o bot deve continuar o fluxo pós-orçamento
+- além disso, mesmo após o orçamento confirmado, o fluxo ainda não está continuando corretamente para o agendamento interativo
+
+PONTO CRÍTICO PARA VOCÊ REVISAR
+Mais cedo houve um erro importante no chatbot_flow.py, na linha 1439:
+- variável `normalized` sendo usada sem ter sido definida
+- erro: UnboundLocalError relacionado a `normalized`
+Quero que você analise isso de novo com atenção no fluxo REAL, porque preciso ter certeza de que:
+1. esse erro foi corrigido em todos os ramos relevantes
+2. o ramo real executado em produção não está caindo em lógica antiga ou em efeito colateral semelhante
+3. a continuação do fluxo para agendamento não está sendo interrompida por step/context inconsistente
+
+O QUE VOCÊ PRECISA ANALISAR E CORRIGIR
+1. O ramo exato de:
+   - endereço não encontrado
+   - cliente responde "Não tenho medidas"
+   - vendedor gera orçamento pelo painel
+   - sistema envia orçamento ao cliente
+   - bot retoma o fluxo
+   - cliente responde que quer agendar
+   - sistema deve abrir lista de dias e horários
+
+2. Corrigir a lógica para que:
+   - o bot não gere orçamento vazio/preliminar para o cliente nesse cenário
+   - o orçamento venha do vendedor/admin pelo painel
+   - após isso o bot continue corretamente no step de pós-orçamento/agendamento
+
+3. Revisar a integração entre:
+   - chatbot_flow.py
+   - conversation_service.py
+   - endpoint/admin que confirma ou gera orçamento
+   - envio de PDF
+   - retorno do controle ao bot
+   - schedule_ask / schedule_day_choice / schedule_slot_choice
+
+4. Revisar se o bug da linha 1439 (`normalized`) realmente ficou resolvido no caminho real e se não existe outro ramo com o mesmo problema conceitual
+
+O QUE EU QUERO NA RESPOSTA
+Quero uma resposta objetiva com:
+1. qual ramo/step estava errado de verdade
+2. por que ele estava gerando orçamento indevido para o cliente
+3. por que o fluxo não estava continuando para agendamento
+4. como o erro da linha 1439 se relaciona ou não com esse problema atual
+5. quais arquivos/funções/steps você corrigiu
+6. confirmação explícita de que o fluxo final ficou assim:
+
+FLUXO FINAL ESPERADO
+- endereço não encontrado
+- cliente não tem medidas
+- encaminha para vendedor
+- vendedor gera orçamento no painel
+- PDF correto é enviado ao cliente
+- bot retoma o fluxo automaticamente
+- pergunta se quer agendar
+- se sim: lista interativa de dias
+- depois: lista interativa de horários
+- confirmação final
+
+Não quero resposta genérica.
+Quero que você revise a implementação real com base nesse comportamento observado e corrija o fluxo certo da AlphaSync.

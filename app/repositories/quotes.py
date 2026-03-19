@@ -31,6 +31,18 @@ class QuotesRepository(TenantRepository[Quote]):
         )
         return self.db.scalar(stmt)
 
+    def get_latest_confirmed_for_conversation(self, conversation_id: int, company_id: int) -> Quote | None:
+        stmt = (
+            select(Quote)
+            .where(
+                Quote.company_id == company_id,
+                Quote.conversation_id == conversation_id,
+                Quote.status == QuoteStatus.CONFIRMED,
+            )
+            .order_by(Quote.id.desc())
+        )
+        return self.db.scalar(stmt)
+
     def get_by_code(self, *, company_id: int, code: str) -> Quote | None:
         stmt = select(Quote).where(
             Quote.company_id == company_id,
