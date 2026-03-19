@@ -1479,7 +1479,7 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
             header="Dias disponíveis",
             body=body_text,
             button_text="Ver dias",
-            sections=[{"title": "Próximos dias disponíveis", "rows": rows}],
+            sections=[{"title": "Dias disponíveis", "rows": rows}],
             next_step="schedule_day_choice",
             context=context,
         )

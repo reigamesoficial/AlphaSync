@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 from typing import Any
 
 import requests
+
+LOG = logging.getLogger("alphasync.whatsapp_client")
 
 from app.core.config import settings
 
@@ -160,6 +163,22 @@ class WhatsAppClient:
         response.raise_for_status()
         return response.json()
 
+    @staticmethod
+    def _sanitize_list_sections(sections: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Enforce Meta field-length limits for list message sections."""
+        clean = []
+        for sec in sections[:10]:
+            title = (sec.get("title") or "")[:24]
+            rows = []
+            for row in (sec.get("rows") or [])[:10]:
+                rows.append({
+                    "id": str(row.get("id") or "")[:200],
+                    "title": str(row.get("title") or "")[:24],
+                    "description": str(row.get("description") or "")[:72],
+                })
+            clean.append({"title": title, "rows": rows})
+        return clean
+
     def send_list_message(
         self,
         phone_number_id: str,
@@ -169,24 +188,36 @@ class WhatsAppClient:
         button_text: str,
         sections: list[dict[str, Any]],
     ) -> dict[str, Any]:
+        safe_sections = self._sanitize_list_sections(sections)
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": to,
+            "type": "interactive",
+            "interactive": {
+                "type": "list",
+                "header": {"type": "text", "text": header[:60]},
+                "body": {"text": body},
+                "action": {
+                    "button": button_text[:20],
+                    "sections": safe_sections,
+                },
+            },
+        }
+        LOG.info(
+            "[wa_client:send_list_message] to=%s button=%r sections=%s",
+            to, payload["interactive"]["action"]["button"],
+            [(s["title"], len(s["rows"])) for s in safe_sections],
+        )
         response = requests.post(
             f"{self.base_url}/{phone_number_id}/messages",
             headers=self._headers(),
-            json={
-                "messaging_product": "whatsapp",
-                "to": to,
-                "type": "interactive",
-                "interactive": {
-                    "type": "list",
-                    "header": {"type": "text", "text": header[:60]},
-                    "body": {"text": body},
-                    "action": {
-                        "button": button_text[:20],
-                        "sections": sections[:10],
-                    },
-                },
-            },
+            json=payload,
             timeout=20,
         )
+        if not response.ok:
+            LOG.error(
+                "[wa_client:send_list_message] Meta 400 to=%s status=%s body=%s",
+                to, response.status_code, response.text,
+            )
         response.raise_for_status()
         return response.json()
