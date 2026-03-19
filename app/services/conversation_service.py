@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import os
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
@@ -7,6 +9,8 @@ from typing import Any
 from fastapi import HTTPException, status
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger("alphasync.conversation")
 
 from app.db.models import (
     Client,
@@ -640,6 +644,89 @@ class ConversationService:
 
         return quote
 
+    def _try_send_quote_pdf(
+        self,
+        *,
+        company: Company,
+        quote: Quote,
+        phone_number_id: str,
+        to_phone: str,
+    ) -> None:
+        try:
+            from app.core.config import settings as app_settings
+            from app.services.pdf_service import generate_quote_pdf
+
+            settings_obj = self.settings_repo.get_by_company_id(company.id)
+            access_token = settings_obj.whatsapp_access_token if settings_obj else None
+            if not access_token:
+                logger.warning(
+                    "Cannot send PDF via WhatsApp: missing whatsapp_access_token for company %s",
+                    company.id,
+                )
+                return
+
+            self.db.refresh(quote)
+
+            brand_name = settings_obj.brand_name if settings_obj else None
+            logo_url = settings_obj.logo_url if settings_obj else None
+            quote_prefix = (settings_obj.quote_prefix if settings_obj else None) or "ORC"
+
+            pdf_bytes = generate_quote_pdf(
+                quote=quote,
+                company_name=company.name,
+                brand_name=brand_name,
+                quote_prefix=quote_prefix,
+                logo_url=logo_url,
+            )
+
+            storage_path = getattr(app_settings, "storage_path", "storage")
+            pdf_dir = os.path.join(storage_path, "quotes", str(company.id))
+            os.makedirs(pdf_dir, exist_ok=True)
+            code = getattr(quote, "code", None) or str(quote.id)
+            filename = f"orcamento_{code}.pdf"
+            pdf_path = os.path.join(pdf_dir, filename)
+            with open(pdf_path, "wb") as f:
+                f.write(pdf_bytes)
+
+            media_base_url = getattr(app_settings, "media_base_url", None)
+            if not media_base_url:
+                logger.warning(
+                    "Cannot send PDF via WhatsApp: media_base_url not configured for company %s",
+                    company.id,
+                )
+                quote.pdf_url = f"/storage/quotes/{company.id}/{filename}"
+                self.db.flush()
+                return
+
+            pdf_url = f"{media_base_url.rstrip('/')}/storage/quotes/{company.id}/{filename}"
+            quote.pdf_url = pdf_url
+            self.db.flush()
+
+            client_name = "cliente"
+            if quote.client_id:
+                _c = self.db.get(Client, quote.client_id)
+                if _c and _c.name:
+                    client_name = _c.name
+
+            self.whatsapp_service.send_document(
+                access_token=access_token,
+                phone_number_id=phone_number_id,
+                to=to_phone,
+                document_url=pdf_url,
+                filename=filename,
+                caption=f"Aqui está o seu orçamento, {client_name}! 📄",
+            )
+            logger.info(
+                "PDF sent via WhatsApp to %s for quote %s (company %s)",
+                to_phone, quote.id, company.id,
+            )
+
+        except Exception as exc:
+            logger.exception(
+                "Failed to send quote PDF via WhatsApp to %s for company %s: %s",
+                to_phone, company.id, exc,
+            )
+
     def _send_domain_response(
         self,
         *,
@@ -869,8 +956,16 @@ class ConversationService:
         )
 
         persisted_quote_id = None
-        if domain_result and conversation.bot_step == "quote_ready":
-            quote_preview = domain_result.get("quote_preview") or {}
+        _should_persist = domain_result and (
+            conversation.bot_step == "quote_ready"
+            or (
+                previous_step == "quote_confirm"
+                and domain_result.get("next_step") == "schedule_ask"
+                and domain_result.get("quote_preview")
+            )
+        )
+        if _should_persist:
+            quote_preview = domain_result.get("quote_preview") or (conversation.bot_context or {}).get("quote_preview") or {}
             quote = self._persist_quote_preview(
                 company=company,
                 client=client,
@@ -879,6 +974,12 @@ class ConversationService:
             )
             if quote:
                 persisted_quote_id = quote.id
+                self._try_send_quote_pdf(
+                    company=company,
+                    quote=quote,
+                    phone_number_id=phone_number_id,
+                    to_phone=self._normalize_phone(from_phone),
+                )
 
         # ── Humanização via IA (opcional, degradação graciosa) ─────────────────
         if domain_result and domain_result.get("text"):

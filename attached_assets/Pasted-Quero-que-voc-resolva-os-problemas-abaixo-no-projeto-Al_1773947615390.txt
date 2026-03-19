@@ -1,0 +1,155 @@
+Quero que você resolva os problemas abaixo no projeto AlphaSync já existente no Replit, usando como base o código atual completo do projeto. Não quero respostas genéricas nem só explicações: quero os ARQUIVOS COMPLETOS JÁ CORRIGIDOS, prontos para sobrescrever no servidor, sem quebrar nada que já esteja funcionando.
+
+IMPORTANTE:
+- Preserve a arquitetura atual do projeto.
+- Não remova funcionalidades já existentes.
+- Não simplifique fluxo.
+- Mantenha compatibilidade com o painel atual e com o backend atual.
+- Corrija tudo de forma consistente entre backend, frontend, serviços, domínio e banco se necessário.
+- Ao final, informe EXATAMENTE quais arquivos foram modificados e em qual app/pasta eles estão, para eu sobrescrever via Git/deploy.
+- Se precisar alterar schema/model/repository/API/frontend, faça.
+- Se precisar adicionar migration, inclua.
+- Se precisar alterar payloads, services, domain flow e componentes do admin, faça.
+- Entregue tudo de forma organizada.
+
+PROBLEMAS A RESOLVER
+
+1) WHATSAPP NÃO ESTÁ ENVIANDO O PDF DO ORÇAMENTO
+Atualmente, após o orçamento ser gerado, o PDF não está sendo enviado ao cliente no WhatsApp.
+Isso precisa funcionar em DOIS casos:
+- quando o orçamento é gerado pelo fluxo do cliente
+- quando o orçamento é gerado pelo fluxo do vendedor/admin
+
+Quero que:
+- o PDF seja enviado automaticamente ao cliente logo após a geração do orçamento
+- o envio use a integração já existente com WhatsApp Cloud API
+- se houver falha no envio, isso seja logado corretamente
+- o sistema continue salvando a mensagem e o orçamento no histórico
+- o outbound message registre corretamente o envio do documento no banco, se aplicável
+
+2) FLUXO DE AGENDAMENTO NÃO ESTÁ SUBINDO LISTA DE DIAS
+O fluxo de agendamento deveria mostrar lista interativa de dias disponíveis, mas isso não está acontecendo.
+Quero que:
+- o fluxo de agendamento envie lista interativa de dias
+- depois envie lista interativa de horários
+- o estado/sessão seja salvo corretamente
+- o retorno do usuário via interactive reply seja interpretado corretamente
+- o step avance corretamente até confirmação final
+
+3) ANTES DE “NÃO ENCONTREI MEDIDAS”, PRECISA PERGUNTAR A COR
+No fluxo atual, antes da mensagem de “não encontrei medidas”, o bot precisa perguntar a cor da rede.
+A ordem correta deve respeitar:
+- identificação do item/serviço
+- coleta das infos necessárias
+- perguntar cor antes de cair em fallback de medidas não encontradas, quando aplicável
+
+Ajuste o domínio/flow para corrigir essa ordem.
+
+4) ESCOLHA DE COR E MALHA NÃO PODE SER MAIS POR NÚMERO
+Hoje cor e malha estão em formato de “responda com número”.
+Quero que ambas sejam convertidas para mensagens interativas do WhatsApp:
+- lista interativa ou botões, conforme melhor prática
+- cor deve permitir seleção amigável
+- malha também
+- o retorno deve ser interpretado corretamente no backend
+- manter compatibilidade com o fluxo atual e com o context/state
+
+5) NOVA PERGUNTA ANTES DE AGENDAR: BLINDEX NA SACADA
+Antes de concluir o agendamento, a IA precisa reconhecer se na conversa/orçamento foi incluída SACADA.
+Se houver sacada, o bot deve perguntar obrigatoriamente:
+
+“Sua sacada possui fechamento de blindex?”
+
+Com botões:
+- Sim
+- Não
+
+Quero que:
+- essa verificação seja feita de forma automática com base no contexto/conteúdo da conversa/itens do orçamento
+- a resposta seja salva no contexto
+- essa resposta possa ser usada depois no fluxo, orçamento, observação de instalação ou agendamento
+- isso só apareça quando fizer sentido, ou seja, quando houver sacada no contexto
+
+6) CADASTRO DE PHONE ID E TOKEN META PELO FRONT DO ADMIN
+Atualmente isso precisa ser possível pelo painel admin.
+Quero que o admin consiga cadastrar/editar pelo front:
+- phone_number_id
+- whatsapp_access_token
+- verify token, se fizer sentido manter editável por empresa
+- quaisquer campos Meta necessários para o fluxo funcionar corretamente
+
+Requisitos:
+- esses campos devem aparecer no painel admin
+- devem salvar corretamente no backend/banco
+- devem ser usados de verdade pelo webhook e pelo envio outbound
+- se hoje estiver inconsistente entre companies e company_settings, corrija a arquitetura de forma coerente
+- a solução final precisa funcionar em produção
+
+7) CORREÇÃO DE ARQUITETURA DOS DADOS META
+Hoje há inconsistência entre onde o sistema busca:
+- phone_number_id
+- access_token
+- verify token
+
+Quero que você revise a arquitetura e deixe consistente:
+- onde cada campo deve ficar
+- como o webhook identifica a empresa
+- como o envio outbound usa o token correto
+- como o admin edita isso no front
+- como repository/service usam esses dados
+
+Pode refatorar repository/service/model/schema se necessário, mas sem quebrar o restante do sistema.
+
+8) LOGS E TRATAMENTO DE ERRO
+Quero tratamento de erro real para:
+- falha ao enviar texto
+- falha ao enviar botões/listas
+- falha ao enviar PDF/documento
+- ausência de token
+- ausência de phone_number_id
+- falha de sessão/step
+- falha de interpretação do interactive reply
+
+Não quero erro silencioso.
+Quero logs claros e retornos coerentes.
+
+ENTREGÁVEIS OBRIGATÓRIOS
+
+1. Me entregue os ARQUIVOS COMPLETOS alterados, não apenas trechos.
+2. Separe por caminho completo, por exemplo:
+- app/services/...
+- app/domains/...
+- app/api/v1/endpoints/...
+- app/repositories/...
+- app/db/...
+- frontend/src/...
+etc.
+
+3. No final, me entregue uma lista objetiva:
+- arquivos novos
+- arquivos modificados
+- migrations necessárias
+- comandos para aplicar
+- quais apps/pastas devo sobrescrever no servidor
+
+4. Se houver alteração no banco, inclua:
+- migration
+ou
+- SQL exato
+
+5. Se houver alteração no frontend admin, entregue os componentes/telas completos alterados.
+
+6. Se houver alteração no webhook, conversation service, WhatsApp service, client da Meta, domain flow e painel admin, entregue tudo completo.
+
+CRITÉRIO DE ACEITE
+Só considere a tarefa concluída se:
+- o cliente receber o PDF do orçamento automaticamente no WhatsApp
+- o vendedor/admin também acionar esse envio corretamente
+- cor e malha estiverem em fluxo interativo
+- dias e horários do agendamento estiverem em lista interativa
+- a pergunta sobre blindex aparecer quando houver sacada
+- phone_number_id e token Meta puderem ser configurados pelo front do admin
+- a arquitetura Meta estiver consistente no backend
+- você me disser exatamente o que sobrescrever no deploy
+
+Agora analise a base atual do projeto no Replit e me devolva os arquivos completos já corrigidos, prontos para substituir.

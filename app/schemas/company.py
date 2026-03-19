@@ -51,6 +51,7 @@ class CompanySettingsBase(BaseSchema):
 
     whatsapp_access_token: str | None = None
     whatsapp_verify_token: str | None = Field(default=None, max_length=255)
+    whatsapp_phone_number_id: str | None = Field(default=None, max_length=40)
 
     calendar_provider: str | None = Field(default=None, max_length=50)
     calendar_id: str | None = Field(default=None, max_length=255)
@@ -76,6 +77,7 @@ class CompanySettingsUpdate(BaseSchema):
 
     whatsapp_access_token: str | None = None
     whatsapp_verify_token: str | None = Field(default=None, max_length=255)
+    whatsapp_phone_number_id: str | None = Field(default=None, max_length=40)
 
     calendar_provider: str | None = Field(default=None, max_length=50)
     calendar_id: str | None = Field(default=None, max_length=255)

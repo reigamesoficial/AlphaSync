@@ -127,6 +127,7 @@ export interface CompanySettings {
   quote_prefix: string | null
   whatsapp_access_token: string | null
   whatsapp_verify_token: string | null
+  whatsapp_phone_number_id: string | null
   calendar_provider: string | null
   calendar_id: string | null
   currency: string

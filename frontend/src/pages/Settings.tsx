@@ -145,6 +145,8 @@ export default function Settings() {
           timezone: s.timezone,
           logo_url: s.logo_url ?? '',
           whatsapp_verify_token: s.whatsapp_verify_token ?? '',
+          whatsapp_access_token: s.whatsapp_access_token ?? '',
+          whatsapp_phone_number_id: s.whatsapp_phone_number_id ?? '',
         })
         setPnForm({ ...pn })
       })
@@ -206,6 +208,8 @@ export default function Settings() {
         timezone: form.timezone,
         logo_url: form.logo_url || null,
         whatsapp_verify_token: form.whatsapp_verify_token || null,
+        whatsapp_access_token: form.whatsapp_access_token || null,
+        whatsapp_phone_number_id: form.whatsapp_phone_number_id || null,
       })
       setSettings(updated)
       showToast('success', 'Configurações salvas com sucesso!')
@@ -385,7 +389,13 @@ export default function Settings() {
                 <Field label="Nome do bot">
                   <input className="input" placeholder="AlphaBot" {...field('bot_name')} />
                 </Field>
-                <Field label="Token de verificação WhatsApp">
+                <Field label="ID do número WhatsApp" hint="Phone Number ID da Meta (para envio de mensagens)">
+                  <input className="input" placeholder="123456789012345" {...field('whatsapp_phone_number_id')} />
+                </Field>
+                <Field label="Token de acesso WhatsApp" hint="Access Token da API do WhatsApp Business">
+                  <input className="input" type="password" placeholder="••••••••" {...field('whatsapp_access_token')} />
+                </Field>
+                <Field label="Token de verificação WhatsApp" hint="Usado para validar o webhook">
                   <input className="input" type="password" placeholder="••••••••" {...field('whatsapp_verify_token')} />
                 </Field>
                 {!!(settings?.extra_settings?.bot) && (

@@ -77,6 +77,7 @@ class SettingsService:
             "quote_prefix": settings_obj.quote_prefix,
             "whatsapp_access_token": settings_obj.whatsapp_access_token,
             "whatsapp_verify_token": settings_obj.whatsapp_verify_token,
+            "whatsapp_phone_number_id": getattr(company, "whatsapp_phone_number_id", None),
             "calendar_provider": settings_obj.calendar_provider,
             "calendar_id": settings_obj.calendar_id,
             "currency": settings_obj.currency,
@@ -113,6 +114,10 @@ class SettingsService:
         settings_obj = self._get_or_create_settings(company)
         current_overrides = settings_obj.extra_settings or {}
         update_data = payload.model_dump(exclude_unset=True)
+
+        phone_number_id = update_data.pop("whatsapp_phone_number_id", None)
+        if phone_number_id is not None:
+            company.whatsapp_phone_number_id = phone_number_id or None
 
         if "extra_settings" in update_data:
             new_extra = update_data.pop("extra_settings") or {}

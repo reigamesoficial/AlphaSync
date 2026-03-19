@@ -2,6 +2,29 @@
 
 Multi-tenant SaaS platform for service businesses with WhatsApp chatbot integration. Includes a FastAPI backend and a React frontend panel.
 
+## Bug Fixes (2026-03-19) — Chatbot & Admin UI
+
+### Chatbot Flow Fixes (`app/domains/protection_network/chatbot_flow.py`)
+- **Interactive color selection**: `_send_color_interactive()` — up to 3 colors use reply buttons, >3 use list. Replaces numbered text list.
+- **Interactive mesh selection**: `_send_mesh_interactive()` — same pattern. Replaces numbered text list.
+- **Resolver update**: `_resolve_color_choice` handles `color_*` button IDs; `_resolve_mesh_choice` handles `mesh_*` list IDs.
+- **Blindex question**: New `blindex_check` step — when any selected item contains "sacada" in description, bot asks "Sua sacada possui fechamento em vidro (Blindex)?" before asking color. Answer stored in context as `blindex: bool`.
+- **Helper**: `_has_sacada_item(context)` checks selected items for "sacada" keyword.
+- **Edit flow**: `quote_edit_choice` edit_color and edit_mesh now use interactive prompts.
+
+### Quote Persistence Fix (`app/services/conversation_service.py`)
+- **Bug fixed**: Quote was only persisted when `bot_step == "quote_ready"` but the flow goes `quote_confirm → schedule_ask`. Now also persists when `previous_step == "quote_confirm"` and `next_step == "schedule_ask"` and `quote_preview` is in domain result.
+- **PDF via WhatsApp**: `_try_send_quote_pdf()` — after quote is persisted, generates PDF bytes, saves to `storage/quotes/{company_id}/`, then sends as WhatsApp document if `media_base_url` is configured.
+
+### WhatsApp Service (`app/services/whatsapp_service.py`)
+- Added `send_document()` method wrapping `WhatsAppClient.send_document_message()`.
+
+### WhatsApp Config via Admin UI
+- **Schema** (`app/schemas/company.py`): Added `whatsapp_phone_number_id` to `CompanySettingsBase`, `CompanySettingsUpdate`, `CompanySettingsResponse`.
+- **Settings service** (`app/services/settings_service.py`): `_build_response` now reads `whatsapp_phone_number_id` from Company record; `upsert_company_settings` pops it and writes to Company.
+- **Frontend types** (`frontend/src/types/index.ts`): Added `whatsapp_phone_number_id` to `CompanySettings`.
+- **Settings page** (`frontend/src/pages/Settings.tsx`): Added "ID do número WhatsApp" and "Token de acesso WhatsApp" fields in the Chatbot section. Both persist via the existing settings API.
+
 ## Frontend Evolution (2026-03-17) — Premium Redesign + New Pages
 
 ### Theme System

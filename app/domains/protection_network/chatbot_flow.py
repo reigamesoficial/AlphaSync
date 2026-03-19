@@ -360,6 +360,11 @@ def _resolve_measure_selection(text: str, items: list[dict[str, Any]]) -> dict[s
 
 def _resolve_color_choice(text: str, colors: list[str]) -> str | None:
     normalized = text.strip().lower()
+    if normalized.startswith("color_"):
+        candidate = normalized[6:].replace("_", " ")
+        for color in colors:
+            if color.lower() == candidate or color.lower().replace(" ", "_") == normalized[6:]:
+                return color
     if normalized.isdigit():
         idx = int(normalized) - 1
         if 0 <= idx < len(colors):
@@ -372,6 +377,11 @@ def _resolve_color_choice(text: str, colors: list[str]) -> str | None:
 
 def _resolve_mesh_choice(text: str, meshes: list[str]) -> str | None:
     normalized = text.strip().lower().replace(" ", "").replace("×", "x")
+    if normalized.startswith("mesh_"):
+        candidate = normalized[5:]
+        for mesh in meshes:
+            if mesh.lower().replace(" ", "").replace("×", "x") == candidate:
+                return mesh
     if normalized.isdigit():
         idx = int(normalized) - 1
         if 0 <= idx < len(meshes):
@@ -385,13 +395,79 @@ def _resolve_mesh_choice(text: str, meshes: list[str]) -> str | None:
 def _color_prompt(company) -> str:
     colors = _build_colors(company)
     numbered = "\n".join(f"{idx}) {color}" for idx, color in enumerate(colors, start=1))
-    return f"Perfeito. Qual cor da rede você deseja?\n{numbered}"
+    return f"Qual cor da rede você deseja?\n{numbered}"
 
 
 def _mesh_prompt(company) -> str:
     meshes = _build_mesh_types(company)
     numbered = "\n".join(f"{idx}) {mesh}" for idx, mesh in enumerate(meshes, start=1))
     return f"Qual malha você deseja?\n{numbered}"
+
+
+def _has_sacada_item(context: dict[str, Any]) -> bool:
+    for item in context.get("selected_items") or []:
+        desc = str(item.get("descricao") or item.get("tipo") or "").lower()
+        if "sacada" in desc:
+            return True
+    return False
+
+
+def _send_color_interactive(conversation, db, *, context: dict[str, Any], company) -> dict[str, Any]:
+    colors = _build_colors(company)
+    if len(colors) <= 3:
+        buttons = [
+            {"id": f"color_{c.replace(' ', '_')}", "title": c.capitalize()[:20]}
+            for c in colors[:3]
+        ]
+        return _reply_buttons(
+            conversation, db,
+            text="Qual cor da rede você deseja?",
+            next_step="network_color",
+            context=context,
+            buttons=buttons,
+        )
+    rows = [
+        {"id": f"color_{c.replace(' ', '_')}", "title": c.capitalize()[:24], "description": ""}
+        for c in colors[:10]
+    ]
+    return _reply_list(
+        conversation, db,
+        header="Cor da rede",
+        body="Qual cor da rede você deseja?",
+        button_text="Escolher",
+        sections=[{"title": "Cores disponíveis", "rows": rows}],
+        next_step="network_color",
+        context=context,
+    )
+
+
+def _send_mesh_interactive(conversation, db, *, context: dict[str, Any], company) -> dict[str, Any]:
+    meshes = _build_mesh_types(company)
+    if len(meshes) <= 3:
+        buttons = [
+            {"id": f"mesh_{m.replace(' ', '_').replace('×', 'x')}", "title": f"Malha {m}"[:20]}
+            for m in meshes[:3]
+        ]
+        return _reply_buttons(
+            conversation, db,
+            text="Qual malha da rede você deseja?",
+            next_step="mesh_type",
+            context=context,
+            buttons=buttons,
+        )
+    rows = [
+        {"id": f"mesh_{m.replace(' ', '_').replace('×', 'x')}", "title": f"Malha {m}"[:24], "description": ""}
+        for m in meshes[:10]
+    ]
+    return _reply_list(
+        conversation, db,
+        header="Malha da rede",
+        body="Qual malha da rede você deseja?",
+        button_text="Escolher",
+        sections=[{"title": "Malhas disponíveis", "rows": rows}],
+        next_step="mesh_type",
+        context=context,
+    )
 
 
 def _format_money_br(value: Any) -> str:
@@ -923,13 +999,20 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
                     next_step="measure_selection",
                     context=context,
                 )
-            return _reply_text(
-                conversation,
-                db,
-                text=_color_prompt(company),
-                next_step="network_color",
-                context=context,
-            )
+            _rebuild_selected_items(context)
+            if _has_sacada_item(context) and not context.get("blindex_asked"):
+                return _reply_buttons(
+                    conversation,
+                    db,
+                    text="Sua sacada possui fechamento em vidro (Blindex)?",
+                    next_step="blindex_check",
+                    context=context,
+                    buttons=[
+                        {"id": "blindex_yes", "title": "Sim, tem Blindex"},
+                        {"id": "blindex_no", "title": "Não tem"},
+                    ],
+                )
+            return _send_color_interactive(conversation, db, context=context, company=company)
 
         return _reply_buttons(
             conversation,
@@ -979,13 +1062,20 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
                 ],
             )
 
-        return _reply_text(
-            conversation,
-            db,
-            text=_color_prompt(company),
-            next_step="network_color",
-            context=context,
-        )
+        _rebuild_selected_items(context)
+        if _has_sacada_item(context) and not context.get("blindex_asked"):
+            return _reply_buttons(
+                conversation,
+                db,
+                text="Sua sacada possui fechamento em vidro (Blindex)?",
+                next_step="blindex_check",
+                context=context,
+                buttons=[
+                    {"id": "blindex_yes", "title": "Sim, tem Blindex"},
+                    {"id": "blindex_no", "title": "Não tem"},
+                ],
+            )
+        return _send_color_interactive(conversation, db, context=context, company=company)
 
     if current_step == "manual_measurements_add_more":
         yn = _normalize_yes_no(text)
@@ -999,13 +1089,20 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
             )
 
         if yn == "no":
-            return _reply_text(
-                conversation,
-                db,
-                text=_color_prompt(company),
-                next_step="network_color",
-                context=context,
-            )
+            _rebuild_selected_items(context)
+            if _has_sacada_item(context) and not context.get("blindex_asked"):
+                return _reply_buttons(
+                    conversation,
+                    db,
+                    text="Sua sacada possui fechamento em vidro (Blindex)?",
+                    next_step="blindex_check",
+                    context=context,
+                    buttons=[
+                        {"id": "blindex_yes", "title": "Sim, tem Blindex"},
+                        {"id": "blindex_no", "title": "Não tem"},
+                    ],
+                )
+            return _send_color_interactive(conversation, db, context=context, company=company)
 
         return _reply_buttons(
             conversation,
@@ -1019,38 +1116,44 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
             ],
         )
 
+    if current_step == "blindex_check":
+        normalized_bl = (text or "").strip().lower()
+        yn = _normalize_yes_no(normalized_bl)
+        if yn is None:
+            if normalized_bl in {"blindex_yes", "blindex"}:
+                yn = "yes"
+            elif normalized_bl == "blindex_no":
+                yn = "no"
+        if yn is None:
+            return _reply_buttons(
+                conversation,
+                db,
+                text="Sua sacada possui fechamento em vidro (Blindex)?",
+                next_step="blindex_check",
+                context=context,
+                buttons=[
+                    {"id": "blindex_yes", "title": "Sim, tem Blindex"},
+                    {"id": "blindex_no", "title": "Não tem"},
+                ],
+            )
+        context["blindex"] = (yn == "yes")
+        context["blindex_asked"] = True
+        return _send_color_interactive(conversation, db, context=context, company=company)
+
     if current_step == "network_color":
         colors = _build_colors(company)
         chosen_color = _resolve_color_choice(text, colors)
         if not chosen_color:
-            return _reply_text(
-                conversation,
-                db,
-                text="Não reconheci essa cor.\n" + _color_prompt(company),
-                next_step="network_color",
-                context=context,
-            )
+            return _send_color_interactive(conversation, db, context=context, company=company)
 
         context["network_color"] = chosen_color.lower().strip()
-        return _reply_text(
-            conversation,
-            db,
-            text=_mesh_prompt(company),
-            next_step="mesh_type",
-            context=context,
-        )
+        return _send_mesh_interactive(conversation, db, context=context, company=company)
 
     if current_step == "mesh_type":
         meshes = _build_mesh_types(company)
         chosen_mesh = _resolve_mesh_choice(text, meshes)
         if not chosen_mesh:
-            return _reply_text(
-                conversation,
-                db,
-                text="Não reconheci essa malha.\n" + _mesh_prompt(company),
-                next_step="mesh_type",
-                context=context,
-            )
+            return _send_mesh_interactive(conversation, db, context=context, company=company)
 
         context["mesh_type"] = chosen_mesh.lower().strip().replace(" ", "").replace("×", "x")
 
@@ -1276,21 +1379,9 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
                 context={},
             )
         if normalized in {"edit_color", "cor", "3"}:
-            return _reply_text(
-                conversation,
-                db,
-                text=_color_prompt(company),
-                next_step="network_color",
-                context=context,
-            )
+            return _send_color_interactive(conversation, db, context=context, company=company)
         if normalized in {"edit_mesh", "malha", "4"}:
-            return _reply_text(
-                conversation,
-                db,
-                text=_mesh_prompt(company),
-                next_step="mesh_type",
-                context=context,
-            )
+            return _send_mesh_interactive(conversation, db, context=context, company=company)
 
         edit_buttons = [{"id": "edit_address", "title": "Endereço"}]
         if show_measures:

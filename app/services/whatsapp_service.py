@@ -223,6 +223,25 @@ class WhatsAppService:
             sections=sections,
         )
 
+    def send_document(
+        self,
+        *,
+        access_token: str,
+        phone_number_id: str,
+        to: str,
+        document_url: str,
+        filename: str,
+        caption: str | None = None,
+    ) -> dict[str, Any]:
+        client = WhatsAppClient(access_token=access_token)
+        return client.send_document_message(
+            phone_number_id=phone_number_id,
+            to=to,
+            document_url=document_url,
+            filename=filename,
+            caption=caption,
+        )
+
     def send_template_message(
         self,
         *,
