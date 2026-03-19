@@ -493,29 +493,38 @@ def _build_selected_items_summary(selected_items: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def _build_quote_confirmation_text(*, client_name: str | None, address: str, selected_items: list[dict[str, Any]], color: str | None, mesh_type: str | None, totals: dict[str, Any], show_measures: bool = True) -> str:
+def _build_quote_confirmation_text(*, client_name: str | None, address: str, selected_items: list[dict[str, Any]], color: str | None, mesh_type: str | None, totals: dict[str, Any], show_measures: bool = True, no_measures_mode: bool = False) -> str:
     customer = client_name or "cliente"
-    subtotal = _format_money_br(totals.get("subtotal"))
-    visit_fee = _format_money_br(totals.get("visit_fee"))
-    total = _format_money_br(totals.get("total_value"))
 
     base = (
         f"Perfeito, {customer}.\n\n"
         f"Confira seu orçamento:\n\n"
         f"Nome: {customer}\n"
-        f"Endereço: {address}\n"
+        f"Endereço: {address or 'a confirmar'}\n"
         f"Cor: {color or 'não informada'}\n"
         f"Malha: {mesh_type or 'não informada'}\n\n"
     )
 
-    if show_measures and selected_items:
+    if no_measures_mode:
+        base += "📏 *Medidas:* a confirmar pelo instalador no local da visita técnica.\n\n"
+        base += (
+            "⚠️ *Orçamento preliminar* — o valor será calculado após a medição no local.\n\n"
+        )
+    elif show_measures and selected_items:
         parts = _build_selected_items_summary(selected_items)
         base += f"Áreas selecionadas:\n{parts}\n\n"
 
+    if not no_measures_mode:
+        subtotal = _format_money_br(totals.get("subtotal"))
+        visit_fee = _format_money_br(totals.get("visit_fee"))
+        total = _format_money_br(totals.get("total_value"))
+        base += (
+            f"Subtotal: R$ {subtotal}\n"
+            f"Taxa/visita: R$ {visit_fee}\n"
+            f"Total estimado: R$ {total}\n\n"
+        )
+
     base += (
-        f"Subtotal: R$ {subtotal}\n"
-        f"Taxa/visita: R$ {visit_fee}\n"
-        f"Total estimado: R$ {total}\n\n"
         f"1) Confirmar orçamento\n"
         f"2) Alterar dados"
     )
@@ -808,15 +817,16 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
                 next_step="manual_measurements",
                 context=context,
             )
-        return _reply_assumed(
+        context["no_measures_mode"] = True
+        return _send_color_interactive(
             conversation,
             db,
-            text=(
-                "Tudo bem! Vou encaminhar seu atendimento para um de nossos especialistas "
-                "montar o orçamento para você 😊\n\n"
-                "Em breve entraremos em contato!"
-            ),
             context=context,
+            company=company,
+            note=(
+                "Tudo bem! Nosso instalador fará a medição no local 📏\n\n"
+                "Para já deixar o orçamento preparado, me informe a preferência de cor:"
+            ),
         )
 
     if current_step == "plant_choice":
@@ -1181,7 +1191,22 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
         show_measures = context.get("show_measures_to_customer", True)
 
         if not selected_items:
-            if show_measures:
+            if context.get("no_measures_mode"):
+                placeholder = {
+                    "descricao": "Rede de proteção — medidas a confirmar pelo instalador",
+                    "tipo": "rede_protecao",
+                    "width": 0,
+                    "height": 0,
+                    "quantity": 1,
+                    "unit_price": 0,
+                    "total_price": 0,
+                    "service_type": "protection_network",
+                    "notes": "Medidas serão confirmadas pelo instalador no local da visita técnica.",
+                    "domain_data": {"no_measures_mode": True},
+                }
+                selected_items = [placeholder]
+                context["selected_items"] = selected_items
+            elif show_measures:
                 return _reply_text(
                     conversation,
                     db,
@@ -1189,13 +1214,14 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
                     next_step="measure_selection",
                     context=context,
                 )
-            return _reply_text(
-                conversation,
-                db,
-                text="Não encontrei medidas para calcular o orçamento. Por favor, informe o endereço novamente.",
-                next_step="address_lookup",
-                context={},
-            )
+            else:
+                return _reply_text(
+                    conversation,
+                    db,
+                    text="Não encontrei medidas para calcular o orçamento. Por favor, informe o endereço novamente.",
+                    next_step="address_lookup",
+                    context={},
+                )
 
         rule_result = resolve_address_rule(company, context.get("address") or "")
         color = context.get("network_color")
@@ -1226,6 +1252,7 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
             mesh_type=mesh_type,
             totals=totals,
             show_measures=show_measures,
+            no_measures_mode=bool(context.get("no_measures_mode")),
         )
 
         return _reply_buttons(
@@ -1249,13 +1276,29 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
                 selected_items = context.get("selected_items") or []
 
             if not selected_items:
-                return _reply_text(
-                    conversation,
-                    db,
-                    text="Perdi as medidas selecionadas. Vamos recomeçar pelo endereço.",
-                    next_step="address_lookup",
-                    context={},
-                )
+                if context.get("no_measures_mode"):
+                    placeholder = {
+                        "descricao": "Rede de proteção — medidas a confirmar pelo instalador",
+                        "tipo": "rede_protecao",
+                        "width": 0,
+                        "height": 0,
+                        "quantity": 1,
+                        "unit_price": 0,
+                        "total_price": 0,
+                        "service_type": "protection_network",
+                        "notes": "Medidas serão confirmadas pelo instalador no local da visita técnica.",
+                        "domain_data": {"no_measures_mode": True},
+                    }
+                    selected_items = [placeholder]
+                    context["selected_items"] = selected_items
+                else:
+                    return _reply_text(
+                        conversation,
+                        db,
+                        text="Perdi as medidas selecionadas. Vamos recomeçar pelo endereço.",
+                        next_step="address_lookup",
+                        context={},
+                    )
 
             address = context.get("address") or ""
             rule_result = resolve_address_rule(company, address)

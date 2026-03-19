@@ -173,6 +173,7 @@ class ConversationService:
             "quote_id",
             "quote_code",
             "quote_status",
+            "no_measures_mode",
         ]
 
         for key in protected_scalar_keys:
