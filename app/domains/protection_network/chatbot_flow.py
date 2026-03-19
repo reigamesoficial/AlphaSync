@@ -1,8 +1,11 @@
 
 from __future__ import annotations
 
+import logging
 from decimal import Decimal
 from typing import Any
+
+LOG = logging.getLogger("alphasync.chatbot_flow")
 
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -619,6 +622,18 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
     normalized = text.strip().lower()
     context = _current_context(conversation)
     current_step = (conversation.bot_step or "start").strip().lower()
+
+    LOG.info(
+        "[bot] conv_id=%s step=%s status=%s raw_text=%r normalized=%r "
+        "reply_id=%r reply_title=%r",
+        conversation.id,
+        current_step,
+        conversation.status,
+        text,
+        normalized,
+        inbound_message.get("interactive_reply_id"),
+        inbound_message.get("interactive_reply_title"),
+    )
 
     if text.lower() in RESET_WORDS:
         context = {}
@@ -1433,7 +1448,15 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
     # ── helper: send the day-choice list ────────────────────────────────────
     def _send_day_list(body_text: str, cfg: dict[str, Any]):
         available_days = _compute_available_days(cfg)
+        LOG.info(
+            "[bot:_send_day_list] conv_id=%s cfg=%s available_days_count=%s",
+            conversation.id, cfg, len(available_days),
+        )
         if not available_days:
+            LOG.warning(
+                "[bot:_send_day_list] conv_id=%s NO DAYS AVAILABLE - sending fallback text",
+                conversation.id,
+            )
             return _reply_text(
                 conversation,
                 db,
@@ -1446,6 +1469,10 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
             )
         context["schedule_available_days"] = available_days
         rows = [{"id": d["id"], "title": d["label"], "description": ""} for d in available_days]
+        LOG.info(
+            "[bot:_send_day_list] conv_id=%s sending list with %s day rows",
+            conversation.id, len(rows),
+        )
         return _reply_list(
             conversation,
             db,
@@ -1547,6 +1574,12 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
 
     # ── step: schedule_ask ───────────────────────────────────────────────────
     if current_step == "schedule_ask":
+        LOG.info(
+            "[bot:schedule_ask] conv_id=%s normalized=%r is_later=%s is_yes=%s",
+            conversation.id, normalized,
+            normalized in SCHEDULE_LATER_WORDS,
+            normalized in SCHEDULE_YES_WORDS,
+        )
         if normalized in SCHEDULE_LATER_WORDS:
             return _reply_text(
                 conversation,
@@ -1556,6 +1589,7 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
                 context=context,
             )
         cfg = _get_schedule_cfg(company, db)
+        LOG.info("[bot:schedule_ask] conv_id=%s calling _send_day_list cfg=%s", conversation.id, cfg)
         return _send_day_list("Perfeito. Escolha um dia para a instalação:", cfg)
 
     # ── step: schedule_day_choice ────────────────────────────────────────────

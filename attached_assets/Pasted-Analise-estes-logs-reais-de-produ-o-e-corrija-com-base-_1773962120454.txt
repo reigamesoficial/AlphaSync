@@ -1,0 +1,64 @@
+Analise estes logs reais de produção e corrija com base neles.
+
+FATOS COMPROVADOS PELOS LOGS
+1. PDF está funcionando:
+   "PDF sent via WhatsApp to 553498256939 for quote 1 (company 1)"
+2. return-to-bot funcionou:
+   POST /api/v1/conversations/1/return-to-bot HTTP/1.1 200
+3. Webhooks do WhatsApp estão chegando após isso:
+   vários POST /api/v1/webhooks/whatsapp HTTP/1.1 200
+4. A agenda do sistema existe e responde:
+   GET /api/v1/appointments/slots?date=2026-03-20 HTTP/1.1 200
+5. Há criação de agendamento via API/painel:
+   POST /api/v1/appointments HTTP/1.1 201
+
+CONCLUSÃO
+Não parece ser problema de infraestrutura, conectividade com agenda ou ausência da VPS 5.
+O problema parece estar no fluxo do bot entre:
+- return-to-bot
+- clique em "Sim, agendar agora"
+- schedule_ask
+- _send_day_list
+- envio da lista interativa de dias
+
+O QUE EU PRECISO QUE VOCÊ REVISE
+1. O ramo exato do botão/resposta:
+   "Sim, agendar agora"
+2. Se isso realmente está colocando a conversa em current_step = schedule_ask
+3. Se schedule_ask está realmente chamando _send_day_list
+4. Se _send_day_list está montando dias
+5. Se send_list_message está sendo chamado
+6. Se houver falha no provider, quero log explícito
+
+QUERO LOGS EXPLÍCITOS ADICIONADOS TEMPORARIAMENTE EM:
+- endpoint return-to-bot
+- handle_inbound_message
+- current_step antes do switch/ifs
+- step schedule_ask
+- _send_day_list
+- send_list_message
+- retorno do provider WhatsApp para a list message
+- qualquer except que hoje esteja sendo engolido
+
+EU QUERO SABER EXATAMENTE:
+- o clique em "Sim, agendar agora" está chegando como button_reply_id? title? text?
+- qual current_step a conversa está quando esse evento entra?
+- se o código entra em schedule_ask
+- se a lista de dias é gerada
+- se a chamada para WhatsApp list message é feita
+- qual resposta da Meta vem disso
+
+OBJETIVO
+Corrigir o fluxo para que, após:
+- vendedor confirmar orçamento
+- clicar return-to-bot
+- cliente clicar "Sim, agendar agora"
+
+o sistema obrigatoriamente:
+1. entre em schedule_ask
+2. envie lista interativa de dias
+3. depois envie lista interativa de horários
+4. conclua agendamento
+
+Não quero hipótese.
+Quero análise do caminho real com logs e correção do ramo exato.

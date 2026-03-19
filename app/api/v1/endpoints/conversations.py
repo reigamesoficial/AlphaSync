@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import logging
 from decimal import Decimal
 from typing import Literal
+
+LOG = logging.getLogger("alphasync.conversations")
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -316,9 +319,24 @@ def return_conversation_to_bot(
     conv_obj.bot_step = "schedule_ask"
     db.add(conv_obj)
 
+    # ── COMMIT FIRST to avoid race condition ─────────────────────────────────
+    # WhatsApp can deliver button replies in <1s. If we commit after sending,
+    # the incoming webhook reads stale data (old status/step) from the DB and
+    # the bot processes the reply at the wrong step.
+    db.commit()
+    LOG.info(
+        "[return-to-bot] conv_id=%s committed: status=BOT bot_step=schedule_ask",
+        conversation_id,
+    )
+
     access_token = company.settings.whatsapp_access_token if company.settings else None
     phone_id = company.whatsapp_phone_number_id
     to_phone = conv_obj.phone
+
+    LOG.info(
+        "[return-to-bot] conv_id=%s to_phone=%s phone_id=%s has_token=%s",
+        conversation_id, to_phone, phone_id, bool(access_token),
+    )
 
     sent_pdf = False
     sent_wa = False
@@ -333,6 +351,10 @@ def return_conversation_to_bot(
         try:
             quotes_repo = QuotesRepository(db)
             quote = quotes_repo.get_latest_confirmed_for_conversation(conversation_id, company_id)
+            LOG.info(
+                "[return-to-bot] conv_id=%s confirmed_quote=%s pdf_url=%s",
+                conversation_id, quote.id if quote else None, quote.pdf_url if quote else None,
+            )
             if quote and quote.pdf_url:
                 wa.send_document(
                     access_token=access_token,
@@ -343,6 +365,7 @@ def return_conversation_to_bot(
                     caption="📄 Segue o PDF do seu orçamento!",
                 )
                 sent_pdf = True
+                LOG.info("[return-to-bot] conv_id=%s PDF sent ok", conversation_id)
             elif quote:
                 svc = ConversationService(db)
                 svc._try_send_quote_pdf(
@@ -352,10 +375,12 @@ def return_conversation_to_bot(
                     to_phone=to_phone,
                 )
                 sent_pdf = True
-        except Exception:
-            pass
+                LOG.info("[return-to-bot] conv_id=%s PDF generated+sent ok", conversation_id)
+        except Exception as exc:
+            LOG.warning("[return-to-bot] conv_id=%s PDF send FAILED: %s", conversation_id, exc)
 
         try:
+            LOG.info("[return-to-bot] conv_id=%s sending schedule buttons...", conversation_id)
             wa.send_buttons(
                 access_token=access_token,
                 phone_number_id=phone_id,
@@ -367,7 +392,9 @@ def return_conversation_to_bot(
                 ],
             )
             sent_wa = True
-        except Exception:
+            LOG.info("[return-to-bot] conv_id=%s schedule buttons sent ok", conversation_id)
+        except Exception as exc:
+            LOG.warning("[return-to-bot] conv_id=%s buttons FAILED (%s), falling back to text", conversation_id, exc)
             try:
                 wa.send_text(
                     access_token=access_token,
@@ -379,10 +406,14 @@ def return_conversation_to_bot(
                     ),
                 )
                 sent_wa = True
-            except Exception:
-                pass
-
-    db.commit()
+                LOG.info("[return-to-bot] conv_id=%s text fallback sent ok", conversation_id)
+            except Exception as exc2:
+                LOG.error("[return-to-bot] conv_id=%s text fallback ALSO failed: %s", conversation_id, exc2)
+    else:
+        LOG.warning(
+            "[return-to-bot] conv_id=%s skipping WA send: missing token/phone_id/to_phone",
+            conversation_id,
+        )
 
     msg = "Conversa retornada ao bot com sucesso."
     if sent_pdf:

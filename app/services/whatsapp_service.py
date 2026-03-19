@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
+
+LOG = logging.getLogger("alphasync.whatsapp_service")
 
 from fastapi import HTTPException, status
 
@@ -213,15 +216,25 @@ class WhatsAppService:
         button_text: str,
         sections: list[dict[str, Any]],
     ) -> dict[str, Any]:
-        client = WhatsAppClient(access_token=access_token)
-        return client.send_list_message(
-            phone_number_id=phone_number_id,
-            to=to,
-            header=header,
-            body=body,
-            button_text=button_text,
-            sections=sections,
+        LOG.info(
+            "[wa:send_list_message] to=%s header=%r button_text=%r sections_count=%s",
+            to, header, button_text, len(sections),
         )
+        client = WhatsAppClient(access_token=access_token)
+        try:
+            result = client.send_list_message(
+                phone_number_id=phone_number_id,
+                to=to,
+                header=header,
+                body=body,
+                button_text=button_text,
+                sections=sections,
+            )
+            LOG.info("[wa:send_list_message] to=%s provider_response=%s", to, result)
+            return result
+        except Exception as exc:
+            LOG.error("[wa:send_list_message] to=%s FAILED: %s", to, exc)
+            raise
 
     def send_document(
         self,
