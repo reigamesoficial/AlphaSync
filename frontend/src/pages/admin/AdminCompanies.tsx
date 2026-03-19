@@ -118,6 +118,9 @@ export default function AdminCompanies() {
   const [toast, setToast] = useState<Toast | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const [wpPhoneId, setWpPhoneId] = useState('')
+  const [wpPhoneIdSaving, setWpPhoneIdSaving] = useState(false)
+
   const showToast = useCallback((msg: string, type: Toast['type'] = 'success') => {
     setToast({ msg, type })
     if (toastTimer.current) clearTimeout(toastTimer.current)
@@ -141,10 +144,25 @@ export default function AdminCompanies() {
     setDetailLoading(true)
     setBootstrapOpen(false)
     setBsError('')
-    try { setDetail(await getCompany(id)) }
+    try {
+      const d = await getCompany(id)
+      setDetail(d)
+      setWpPhoneId(d.whatsapp_phone_number_id ?? '')
+    }
     catch { showToast('Erro ao carregar empresa', 'error'); setSelectedId(null) }
     finally { setDetailLoading(false) }
   }, [showToast])
+
+  const handleSaveWpPhoneId = async () => {
+    if (!detail) return
+    setWpPhoneIdSaving(true)
+    try {
+      const updated = await updateCompany(detail.id, { whatsapp_phone_number_id: wpPhoneId || undefined })
+      setDetail(updated)
+      showToast('Phone Number ID salvo!')
+    } catch { showToast('Erro ao salvar Phone Number ID', 'error') }
+    finally { setWpPhoneIdSaving(false) }
+  }
 
   const closeDetail = () => { setSelectedId(null); setDetail(null); setBootstrapOpen(false) }
 
@@ -474,6 +492,32 @@ export default function AdminCompanies() {
                     </div>
                   </div>
                 )}
+
+                {/* WhatsApp config */}
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">WhatsApp</p>
+                  <div className="card p-4 space-y-3">
+                    <div>
+                      <label className="block text-xs text-slate-500 mb-1.5">Phone Number ID</label>
+                      <div className="flex gap-2">
+                        <input
+                          className="input flex-1 font-mono text-xs"
+                          placeholder="123456789012345"
+                          value={wpPhoneId}
+                          onChange={e => setWpPhoneId(e.target.value)}
+                        />
+                        <button
+                          onClick={handleSaveWpPhoneId}
+                          disabled={wpPhoneIdSaving}
+                          className="btn-primary px-3 text-xs shrink-0"
+                        >
+                          {wpPhoneIdSaving ? '…' : 'Salvar'}
+                        </button>
+                      </div>
+                      <p className="text-slate-600 text-xs mt-1">Token de acesso (access_token) configurado nas Configurações da empresa.</p>
+                    </div>
+                  </div>
+                </div>
 
                 {/* Extra settings */}
                 {detail.settings?.extra_settings && Object.keys(detail.settings.extra_settings).length > 0 && (

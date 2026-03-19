@@ -1,0 +1,60 @@
+Perfeito, avançou bastante. Agora preciso fechar o pacote completo.
+
+Quero que você entregue o restante e confirme explicitamente os pontos abaixo, sem resumir demais:
+
+1. Agendamento em lista interativa
+Confirme e implemente, se ainda faltar:
+- lista interativa de dias disponíveis
+- lista interativa de horários disponíveis
+- interpretação correta dos interactive replies
+- avanço correto de step até confirmação final
+
+2. Ordem do fluxo
+Confirme e ajuste, se ainda faltar:
+- antes do fallback de “não encontrei medidas”, o bot deve perguntar a cor quando aplicável
+
+3. Logs e tratamento de erro
+Quero confirmação explícita de como ficou o tratamento para:
+- falha ao enviar texto
+- falha ao enviar botões
+- falha ao enviar lista
+- falha ao enviar PDF/documento
+- ausência de whatsapp_access_token
+- ausência de phone_number_id
+- falha no fluxo/sessão
+- erro de interactive reply
+
+4. Arquitetura Meta consistente
+Explique objetivamente como ficou:
+- onde phone_number_id é salvo
+- onde whatsapp_access_token é salvo
+- como o webhook identifica a empresa
+- como o outbound usa o token correto
+- como o admin edita isso
+- quais models/repositories/services foram ajustados
+
+5. Entrega dos arquivos completos
+Agora me entregue os ARQUIVOS COMPLETOS alterados, organizados por caminho completo.
+Não quero só explicação.
+Quero todos os arquivos prontos para sobrescrever.
+
+6. Lista final de deploy
+Ao final, me entregue exatamente:
+- arquivos modificados
+- arquivos novos
+- migrations ou SQL necessários
+- comandos para aplicar
+- quais apps/pastas devo sobrescrever no servidor via git/deploy
+
+7. Critério final
+Só considere concluído quando estiver coberto:
+- PDF do orçamento enviado ao cliente
+- PDF também enviado quando orçamento for gerado pelo vendedor/admin
+- cor e malha em fluxo interativo
+- dias e horários em lista interativa
+- pergunta de blindex para sacada
+- campos Meta editáveis no front admin
+- backend consistente com esses dados
+- lista completa de arquivos para sobrescrita
+
+Agora me devolva os arquivos completos restantes e a relação final exata do que devo substituir no deploy.

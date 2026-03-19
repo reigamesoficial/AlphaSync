@@ -112,14 +112,43 @@ def update_quote(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
+    import logging as _log
     repo = QuotesRepository(db)
     quote = repo.get_by_id_and_company(quote_id, company_id)
     if not quote:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Orçamento não encontrado.")
 
     update_data = payload.model_dump(exclude_unset=True)
+    status_changing_to_confirmed = update_data.get("status") == QuoteStatus.CONFIRMED
+
     repo.update_quote(quote, **update_data)
     db.commit()
+
+    if status_changing_to_confirmed:
+        try:
+            from app.services.conversation_service import ConversationService
+            svc = ConversationService(db)
+            fresh = repo.get_full_by_id_and_company(quote_id, company_id)
+            if fresh:
+                company_obj = getattr(fresh, "company", None)
+                phone_number_id = getattr(company_obj, "whatsapp_phone_number_id", None) if company_obj else None
+                client_obj = getattr(fresh, "client", None)
+                phone = None
+                conv = getattr(fresh, "conversation", None)
+                if conv:
+                    phone = getattr(conv, "phone", None)
+                if not phone and client_obj:
+                    phone = getattr(client_obj, "phone", None)
+                if fresh and company_obj and phone_number_id and phone:
+                    svc._try_send_quote_pdf(
+                        company=company_obj,
+                        quote=fresh,
+                        phone_number_id=phone_number_id,
+                        to_phone=phone,
+                    )
+        except Exception as exc:
+            _log.getLogger("alphasync.quotes").warning("PDF auto-send on CONFIRMED failed: %s", exc)
+
     return repo.get_full_by_id_and_company(quote_id, company_id)
 
 

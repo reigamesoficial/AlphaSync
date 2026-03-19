@@ -412,8 +412,11 @@ def _has_sacada_item(context: dict[str, Any]) -> bool:
     return False
 
 
-def _send_color_interactive(conversation, db, *, context: dict[str, Any], company) -> dict[str, Any]:
+def _send_color_interactive(conversation, db, *, context: dict[str, Any], company, note: str | None = None) -> dict[str, Any]:
     colors = _build_colors(company)
+    body = "Qual cor da rede você deseja?"
+    if note:
+        body = f"{note}\n\n{body}"
     if len(colors) <= 3:
         buttons = [
             {"id": f"color_{c.replace(' ', '_')}", "title": c.capitalize()[:20]}
@@ -421,7 +424,7 @@ def _send_color_interactive(conversation, db, *, context: dict[str, Any], compan
         ]
         return _reply_buttons(
             conversation, db,
-            text="Qual cor da rede você deseja?",
+            text=body,
             next_step="network_color",
             context=context,
             buttons=buttons,
@@ -433,7 +436,7 @@ def _send_color_interactive(conversation, db, *, context: dict[str, Any], compan
     return _reply_list(
         conversation, db,
         header="Cor da rede",
-        body="Qual cor da rede você deseja?",
+        body=body,
         button_text="Escolher",
         sections=[{"title": "Cores disponíveis", "rows": rows}],
         next_step="network_color",
@@ -730,18 +733,26 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
             context["address_items_available"] = all_items
 
             if not show_measures:
-                # Auto-select all, skip measure list, go straight to color.
-                # Plant name is always shown to the client (rule: plant name always visible).
+                # Auto-select all, skip measure list, go straight to blindex/color.
                 context["selected_items"] = all_items
                 context["selected_item_ids"] = [i.get("selection_id") for i in all_items]
-                plant_prefix = f"Planta: *{chosen_plant}*\n\n" if chosen_plant else ""
-                return _reply_text(
-                    conversation,
-                    db,
-                    text=plant_prefix + _color_prompt(company),
-                    next_step="network_color",
-                    context=context,
-                )
+                if chosen_plant:
+                    context["selected_plant"] = chosen_plant
+                _rebuild_selected_items(context)
+                note = f"Planta: *{chosen_plant}*" if chosen_plant else None
+                if _has_sacada_item(context) and not context.get("blindex_asked"):
+                    prefix = f"{note}\n\n" if note else ""
+                    return _reply_buttons(
+                        conversation, db,
+                        text=prefix + "Sua sacada possui fechamento em vidro (Blindex)?",
+                        next_step="blindex_check",
+                        context=context,
+                        buttons=[
+                            {"id": "blindex_yes", "title": "Sim, tem Blindex"},
+                            {"id": "blindex_no", "title": "Não tem"},
+                        ],
+                    )
+                return _send_color_interactive(conversation, db, context=context, company=company, note=note)
 
             context["selected_items"] = []
             context["selected_item_ids"] = []
@@ -850,16 +861,24 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
         context["address_items_available"] = all_items
 
         if not show_measures:
-            # Plant chosen — auto-select all measures of this plant, jump to color.
-            # Plant name is always shown to the client (rule: plant name always visible).
+            # Plant chosen — auto-select all measures, jump to blindex/color.
             context["selected_items"] = all_items
             context["selected_item_ids"] = [i.get("selection_id") for i in all_items]
-            return _reply_text(
-                conversation,
-                db,
-                text=f"Planta: *{chosen_plant}*\n\n" + _color_prompt(company),
-                next_step="network_color",
-                context=context,
+            _rebuild_selected_items(context)
+            if _has_sacada_item(context) and not context.get("blindex_asked"):
+                return _reply_buttons(
+                    conversation, db,
+                    text=f"Planta: *{chosen_plant}*\n\nSua sacada possui fechamento em vidro (Blindex)?",
+                    next_step="blindex_check",
+                    context=context,
+                    buttons=[
+                        {"id": "blindex_yes", "title": "Sim, tem Blindex"},
+                        {"id": "blindex_no", "title": "Não tem"},
+                    ],
+                )
+            return _send_color_interactive(
+                conversation, db, context=context, company=company,
+                note=f"Planta: *{chosen_plant}*",
             )
 
         context["selected_items"] = []
