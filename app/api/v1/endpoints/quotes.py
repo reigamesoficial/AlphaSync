@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import os
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
+from app.core.config import settings as app_settings
 from app.core.security import get_current_active_user
 from app.core.tenancy import get_tenant_company_id
 from app.db.connection import get_db
@@ -159,13 +162,55 @@ def generate_pdf(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
+    import logging as _log
+    _logger = _log.getLogger("alphasync.quotes")
+
     repo = QuotesRepository(db)
+    settings_repo = CompanySettingsRepository(db)
+
     quote = repo.get_full_by_id_and_company(quote_id, company_id)
     if not quote:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Orçamento não encontrado.")
 
-    pdf_endpoint = f"/api/v1/quotes/{quote_id}/pdf"
-    repo.update_quote(quote, pdf_url=pdf_endpoint)
+    company_name = quote.company.name if getattr(quote, "company", None) else "Empresa"
+    cs = settings_repo.get_by_company_id(company_id)
+    brand_name = cs.brand_name if cs else None
+    quote_prefix = (cs.quote_prefix or "ORC") if cs else "ORC"
+    logo_url = cs.logo_url if cs else None
+    extra = (cs.extra_settings or {}) if cs else {}
+    show_measures = bool(extra.get("show_measures_to_customer", True))
+
+    try:
+        pdf_bytes = generate_quote_pdf(
+            quote=quote,
+            company_name=company_name,
+            brand_name=brand_name,
+            quote_prefix=quote_prefix,
+            logo_url=logo_url,
+            show_measures=show_measures,
+        )
+    except Exception as exc:
+        _logger.exception("generate-pdf: PDF generation failed for quote %s: %s", quote_id, exc)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Falha ao gerar PDF.")
+
+    storage_path = getattr(app_settings, "storage_path", "storage")
+    pdf_dir = os.path.join(storage_path, "quotes", str(company_id))
+    os.makedirs(pdf_dir, exist_ok=True)
+    code = getattr(quote, "code", None) or str(quote_id)
+    filename = f"orcamento_{code}.pdf"
+    pdf_path = os.path.join(pdf_dir, filename)
+    with open(pdf_path, "wb") as f:
+        f.write(pdf_bytes)
+
+    media_base_url = getattr(app_settings, "media_base_url", None)
+    if media_base_url:
+        pdf_url = f"{media_base_url.rstrip('/')}/storage/quotes/{company_id}/{filename}"
+    else:
+        pdf_url = f"/storage/quotes/{company_id}/{filename}"
+
+    _logger.info("generate-pdf: saved %s (%d bytes) → %s", pdf_path, len(pdf_bytes), pdf_url)
+
+    repo.update_quote(quote, pdf_url=pdf_url)
     db.commit()
     return repo.get_full_by_id_and_company(quote_id, company_id)
 

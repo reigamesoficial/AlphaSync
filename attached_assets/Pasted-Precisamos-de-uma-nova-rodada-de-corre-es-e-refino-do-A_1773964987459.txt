@@ -1,0 +1,200 @@
+Precisamos de uma nova rodada de correções e refino do AlphaSync, agora focada em consistência entre painel, estoque, orçamento e chatbot.
+
+IMPORTANTE:
+- Não quero respostas genéricas.
+- Quero análise do fluxo real já existente no projeto.
+- Quero corrigir sem quebrar o que já funciona.
+- Quero manter a arquitetura atual do AlphaSync.
+- Todas as mudanças devem respeitar a lógica multiempresa.
+- O fluxo do bot deve depender do que o admin da empresa cadastrar no painel.
+- Tudo precisa ficar consistente entre backend, frontend, banco, painel e WhatsApp.
+- Respeitar os limites de caracteres da Meta em botões/listas/títulos/descrições.
+
+PROBLEMAS A CORRIGIR AGORA
+
+1) ORÇAMENTO ESTÁ CHEGANDO EM HTML E VAZIO PARA O CLIENTE
+Hoje o orçamento está chegando ao cliente em HTML e vazio.
+Isso está errado.
+
+O correto é:
+- o cliente deve receber o orçamento em PDF
+- o PDF deve ser o arquivo real do orçamento
+- não pode enviar HTML cru para o WhatsApp
+- não pode enviar orçamento vazio
+- quando o vendedor/admin gerar ou confirmar o orçamento, o sistema deve:
+  1. gerar o PDF correto
+  2. salvar corretamente
+  3. enviar o PDF ao cliente via WhatsApp document message
+  4. registrar o envio no histórico
+- revisar tanto o fluxo do vendedor quanto o fluxo do retorno ao bot
+
+Quero que você identifique:
+- por que está indo HTML
+- por que está vazio
+- em qual função/endpoint isso acontece
+- e corrija para envio real em PDF
+
+2) NÃO ESTÁ DANDO PARA EDITAR OU CANCELAR AGENDAMENTO NOS PAINÉIS
+Hoje os painéis de:
+- vendedor
+- admin empresa
+
+não estão permitindo editar nem cancelar agendamento corretamente.
+
+Quero que você revise:
+- endpoints de appointments
+- permissões/roles
+- frontend de appointments
+- ações de editar/remarcar
+- ações de cancelar
+- update de status
+- sincronização com calendário interno do sistema
+
+Objetivo:
+- vendedor e admin empresa devem conseguir editar agendamento
+- vendedor e admin empresa devem conseguir cancelar agendamento
+- alterações devem refletir corretamente no painel e no banco
+- se houver notificação ao cliente, manter coerência com o fluxo atual
+
+3) ORDEM DO FLUXO DO BOT: MALHA DEVE VIR ANTES DE PEDIR MEDIDAS
+Hoje isso está fora da lógica desejada.
+
+A ordem correta deve ser:
+1. identificar necessidade / item
+2. perguntar qual malha desejada
+3. depois perguntar cor
+4. depois seguir para medidas/endereço/orçamento conforme o fluxo
+
+Ou seja:
+- antes de pedir medidas, o bot precisa perguntar a malha desejada
+- depois precisa perguntar a cor
+- e essas opções devem depender do cadastro do admin empresa
+
+4) REGRAS DE EXIBIÇÃO DA MALHA NO CHATBOT
+No fluxo do WhatsApp, a malha precisa aparecer com descrição amigável e curta, respeitando os limites da Meta.
+
+Quero que as opções apareçam assim:
+
+- 5x5 (Padrão)
+- 3x3 (Gato filhote / pássaros)
+- 10x10 (Quadras / gols)
+
+Requisitos:
+- respeitar limites da Meta para botões/listas
+- não quebrar interactive reply
+- id interno pode ser técnico, mas o texto mostrado ao cliente deve ser amigável
+- manter consistência com o item/orçamento
+
+5) ESTOQUE E CATÁLOGO DEVEM VIR DO PAINEL ADMIN EMPRESA
+Todo esse fluxo precisa depender do cadastro que o admin empresa fizer.
+
+Quero que o admin empresa possa gerenciar no painel:
+- quais malhas existem
+- quais estão ativas/inativas
+- preço por m² da malha 3x3
+- preço por m² da malha 10x10
+- preço por m² da malha 5x5, se ainda não estiver consistente
+- quais cores estão disponíveis para cada malha
+- quais combinações malha + cor podem ser usadas no fluxo
+
+Exemplo:
+- malha 5x5 pode ter branca, areia, preta
+- malha 3x3 pode ter branca e preta
+- malha 10x10 pode ter cinza e branca
+
+O chatbot deve usar exatamente esse cadastro.
+Ou seja:
+- primeiro mostra as malhas ativas
+- após escolher a malha, mostra apenas as cores disponíveis para aquela malha
+- se o admin alterar isso no painel, o bot deve refletir automaticamente
+
+6) PAINEL ADMIN EMPRESA — ESTRUTURA DE CADASTRO
+Quero que o painel admin empresa permita:
+- cadastrar tamanho de malha
+- editar tamanho de malha
+- ativar/desativar malha
+- definir preço do m² por malha
+- cadastrar cores disponíveis por malha
+- editar cores disponíveis por malha
+- remover cores de uma malha
+- tudo isso persistido no banco
+
+Se precisar criar novas tabelas/relacionamentos, faça de forma correta.
+
+7) ALINHAMENTO TOTAL ENTRE CHATBOT E ESTOQUE/CADASTRO
+O fluxo do chatbot não pode mais ser hardcoded para malha/cor.
+Ele precisa ler da configuração/cadastro da empresa.
+
+Quero que você revise:
+- domain flow
+- repositories
+- models
+- schemas
+- settings/catalog endpoints
+- frontend admin empresa
+- lógica de orçamento
+
+Objetivo final:
+- o que o admin cadastra no painel define o que o cliente vê no bot
+- preço e opções de cor/malha devem sair do banco
+- orçamento deve respeitar isso
+- painel e bot devem usar a mesma fonte de verdade
+
+8) IMPORTANTE SOBRE O PDF
+Revisar com atenção:
+- geração do PDF
+- caminho do arquivo
+- URL pública
+- media_base_url
+- envio via document message
+- garantir que não está enviando HTML por engano
+- garantir que o PDF não sai vazio
+- garantir que o conteúdo do orçamento esteja correto
+
+9) IMPORTANTE SOBRE AGENDAMENTO
+Além de corrigir editar/cancelar no painel, garanta:
+- o fluxo do bot continua funcionando para agendamento
+- lista de dias e horários continua respeitando os limites da Meta
+- alteração/cancelamento no painel reflita corretamente no sistema
+
+O QUE EU QUERO COMO RESPOSTA
+Quero uma resposta objetiva em 4 partes:
+
+PARTE 1 — DIAGNÓSTICO
+- o que está causando o orçamento HTML/vazio
+- o que está bloqueando editar/cancelar agendamento
+- o que hoje está hardcoded no fluxo de malha/cor
+- o que precisa virar cadastro do admin
+
+PARTE 2 — ARQUITETURA DA CORREÇÃO
+- quais tabelas/models/schemas/endpoints/frontend precisam mudar
+- como ficará a estrutura de malha, cor e preço por m²
+- como o bot vai consumir isso
+
+PARTE 3 — IMPLEMENTAÇÃO
+- faça as correções na base atual do projeto
+- preserve o que já funciona
+- respeite o fluxo real da AlphaSync
+
+PARTE 4 — ENTREGA OPERACIONAL
+No final, me informe exatamente:
+- quais arquivos foram modificados
+- quais arquivos são backend
+- quais arquivos são frontend
+- se houve migration/SQL
+- quais comandos preciso rodar no servidor
+- se precisa rebuildar backend, frontend ou ambos
+
+CRITÉRIO DE ACEITE
+Só considere concluído se:
+- orçamento deixar de ir em HTML e passar a ir em PDF correto
+- PDF não estiver vazio
+- vendedor e admin empresa conseguirem editar e cancelar agendamento
+- malha vier antes de medidas no bot
+- cor vier depois da malha
+- malhas e cores dependam do cadastro do admin empresa
+- admin empresa possa cadastrar preço do m² da 3x3 e 10x10
+- chatbot use exatamente as opções cadastradas no painel
+- tudo continue respeitando os limites da Meta
+
+Analise a base real já existente no projeto e corrija isso de forma consistente.

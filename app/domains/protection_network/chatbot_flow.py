@@ -282,18 +282,50 @@ def _append_selected_item(context: dict[str, Any], item: dict[str, Any]) -> None
         selected_ids.append(selection_id)
 
 
-def _build_colors(company) -> list[str]:
+DEFAULT_MESH_CATALOG = [
+    {"id": "3x3", "label": "3x3 — Gatos e pássaros pequenos", "active": True, "colors": []},
+    {"id": "5x5", "label": "5x5 — Padrão / crianças e pets", "active": True, "colors": []},
+    {"id": "10x10", "label": "10x10 — Quadras e gols", "active": True, "colors": []},
+]
+
+
+def _build_mesh_catalog(company) -> list[dict]:
     settings = _domain_settings(company)
-    # stored as "network_colors" in extra_settings / domain defaults
+    catalog = settings.get("mesh_catalog")
+    if catalog and isinstance(catalog, list):
+        return [
+            m for m in catalog
+            if isinstance(m, dict) and m.get("id") and m.get("active", True) is not False
+        ]
+    meshes = settings.get("mesh_types") or settings.get("available_mesh_types") or ["3x3", "5x5", "10x10"]
+    label_map = {m["id"]: m["label"] for m in DEFAULT_MESH_CATALOG}
+    return [
+        {
+            "id": str(m).strip().lower().replace("×", "x"),
+            "label": label_map.get(str(m).strip().lower().replace("×", "x"), f"Malha {str(m).strip()}"),
+            "active": True,
+            "colors": [],
+        }
+        for m in meshes if str(m).strip()
+    ]
+
+
+def _build_colors(company, mesh_id: str | None = None) -> list[str]:
+    settings = _domain_settings(company)
+    if mesh_id:
+        catalog = settings.get("mesh_catalog")
+        if catalog and isinstance(catalog, list):
+            for entry in catalog:
+                if isinstance(entry, dict) and entry.get("id") == mesh_id:
+                    per_mesh_colors = entry.get("colors")
+                    if per_mesh_colors and isinstance(per_mesh_colors, list) and len(per_mesh_colors) > 0:
+                        return [str(c).strip().lower() for c in per_mesh_colors if str(c).strip()]
     colors = settings.get("network_colors") or settings.get("available_colors") or ["branca", "preta", "areia", "cinza"]
     return [str(c).strip().lower() for c in colors if str(c).strip()]
 
 
 def _build_mesh_types(company) -> list[str]:
-    settings = _domain_settings(company)
-    # stored as "mesh_types" in extra_settings / domain defaults
-    meshes = settings.get("mesh_types") or settings.get("available_mesh_types") or ["3x3", "5x5", "10x10"]
-    return [str(m).strip().lower().replace("×", "x") for m in meshes if str(m).strip()]
+    return [m["id"] for m in _build_mesh_catalog(company)]
 
 
 def _resolve_plant_choice(text: str, plant_names: list[str]) -> str | None:
@@ -416,7 +448,8 @@ def _has_sacada_item(context: dict[str, Any]) -> bool:
 
 
 def _send_color_interactive(conversation, db, *, context: dict[str, Any], company, note: str | None = None) -> dict[str, Any]:
-    colors = _build_colors(company)
+    mesh_id = context.get("mesh_type")
+    colors = _build_colors(company, mesh_id=mesh_id)
     body = "Qual cor da rede você deseja?"
     if note:
         body = f"{note}\n\n{body}"
@@ -448,11 +481,14 @@ def _send_color_interactive(conversation, db, *, context: dict[str, Any], compan
 
 
 def _send_mesh_interactive(conversation, db, *, context: dict[str, Any], company) -> dict[str, Any]:
-    meshes = _build_mesh_types(company)
-    if len(meshes) <= 3:
+    catalog = _build_mesh_catalog(company)
+    if len(catalog) <= 3:
         buttons = [
-            {"id": f"mesh_{m.replace(' ', '_').replace('×', 'x')}", "title": f"Malha {m}"[:20]}
-            for m in meshes[:3]
+            {
+                "id": f"mesh_{m['id'].replace(' ', '_').replace('×', 'x')}",
+                "title": m["label"][:20],
+            }
+            for m in catalog[:3]
         ]
         return _reply_buttons(
             conversation, db,
@@ -462,8 +498,12 @@ def _send_mesh_interactive(conversation, db, *, context: dict[str, Any], company
             buttons=buttons,
         )
     rows = [
-        {"id": f"mesh_{m.replace(' ', '_').replace('×', 'x')}", "title": f"Malha {m}"[:24], "description": ""}
-        for m in meshes[:10]
+        {
+            "id": f"mesh_{m['id'].replace(' ', '_').replace('×', 'x')}",
+            "title": m["label"][:24],
+            "description": "",
+        }
+        for m in catalog[:10]
     ]
     return _reply_list(
         conversation, db,
@@ -617,6 +657,98 @@ def _format_date_pt(d) -> str:
     return f"{d.day:02d}/{d.month:02d}/{d.year} ({day_name})"
 
 
+def _build_quote_and_confirm(conversation, db, *, context: dict[str, Any], company) -> dict[str, Any]:
+    """
+    Build the quote preview and send confirmation buttons.
+    Assumes mesh_type + network_color + selected_items are all in context.
+    Falls back to asking mesh/color if missing (backwards compat for mid-flow conversations).
+    Also handles the blindex check if a sacada item is selected and blindex hasn't been asked.
+    """
+    _rebuild_selected_items(context)
+
+    if not context.get("mesh_type"):
+        return _send_mesh_interactive(conversation, db, context=context, company=company)
+
+    if not context.get("network_color"):
+        return _send_color_interactive(conversation, db, context=context, company=company)
+
+    if _has_sacada_item(context) and not context.get("blindex_asked"):
+        return _reply_buttons(
+            conversation, db,
+            text="Sua sacada possui fechamento em vidro (Blindex)?",
+            next_step="blindex_check",
+            context=context,
+            buttons=[
+                {"id": "blindex_yes", "title": "Sim, tem Blindex"},
+                {"id": "blindex_no", "title": "Não tem"},
+            ],
+        )
+
+    selected_items = context.get("selected_items") or []
+    show_measures = context.get("show_measures_to_customer", True)
+
+    if not selected_items:
+        if show_measures:
+            return _reply_text(
+                conversation, db,
+                text="Não encontrei nenhuma área selecionada. Escolha uma área primeiro.",
+                next_step="measure_selection",
+                context=context,
+            )
+        return _reply_text(
+            conversation, db,
+            text="Não encontrei medidas para calcular o orçamento. Por favor, informe o endereço novamente.",
+            next_step="address_lookup",
+            context={},
+        )
+
+    rule_result = resolve_address_rule(company, context.get("address") or "")
+    color = context.get("network_color")
+    mesh_type = context.get("mesh_type")
+
+    quote_items = build_quote_items_from_selection(
+        selected_items=selected_items,
+        company=company,
+        mesh_type=mesh_type or "3x3",
+        color=color,
+        rule_result=rule_result,
+    )
+    totals = calculate_quote_totals(
+        company=company,
+        items=quote_items,
+        rule_result=rule_result,
+    )
+    context["quote_preview"] = {
+        "items": [
+            {k: (str(v) if isinstance(v, Decimal) else v) for k, v in item.items()}
+            for item in quote_items
+        ],
+        "totals": {k: str(v) for k, v in totals.items()},
+    }
+
+    client_name = context.get("customer_name")
+    summary = _build_quote_confirmation_text(
+        client_name=client_name,
+        address=context.get("address") or "",
+        selected_items=selected_items,
+        color=color,
+        mesh_type=mesh_type,
+        totals=totals,
+        show_measures=show_measures,
+    )
+
+    return _reply_buttons(
+        conversation, db,
+        text=summary,
+        next_step="quote_confirm",
+        context=context,
+        buttons=[
+            {"id": "quote_confirm_yes", "title": "Confirmar"},
+            {"id": "quote_confirm_edit", "title": "Alterar"},
+        ],
+    )
+
+
 def handle_inbound_message(*, company, conversation, client, inbound_message, db):
     text = _safe_text(inbound_message)
     normalized = text.strip().lower()
@@ -695,98 +827,48 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
             plants = lookup_result.get("plants", {}) or {}
             plant_names = list(plants.keys())
 
-            # Multiple plants → ALWAYS ask the client (plant names are always visible,
-            # regardless of show_measures_to_customer toggle)
+            # Multiple plants → ask mesh+color first, then plant choice
             if len(plant_names) > 1:
                 context["address_plants"] = plant_names
                 context["selected_items"] = []
                 context["selected_item_ids"] = []
-
-                rows = []
-                for idx, plant in enumerate(plant_names[:10], start=1):
-                    rows.append(
-                        {
-                            "id": f"pick_plant_{idx}",
-                            "title": plant[:24],
-                            "description": "",
-                        }
-                    )
-
-                return _reply_list(
-                    conversation,
-                    db,
-                    header="Escolha a planta",
-                    body="Encontrei mais de uma planta para esse endereço.\nQual é a sua planta?",
-                    button_text="Ver plantas",
-                    sections=[{"title": "Plantas disponíveis", "rows": rows}],
-                    next_step="plant_choice",
-                    context=context,
-                )
+                context["pending_after_color"] = "plant_choice"
+                return _send_mesh_interactive(conversation, db, context=context, company=company)
 
             # Single plant (or no plant grouping)
             chosen_plant = plant_names[0] if plant_names else None
             items = _items_from_catalog_lookup(lookup_result, chosen_plant)
+
             if not items:
+                # Address found but no items → ask mesh+color first, then manual measurements
                 context["selected_items"] = []
                 context["selected_item_ids"] = []
-                return _reply_text(
-                    conversation,
-                    db,
-                    text=(
-                        "Encontrei o endereço, mas ainda não há medidas cadastradas.\n\n"
-                        "Me envie as medidas.\n"
-                        "Você pode mandar uma por vez:\n"
-                        "1 sacada 1,20 x 1,40\n\n"
-                        "Ou várias linhas de uma vez:\n"
-                        "1 janela sala 1,29 x 1,19\n"
-                        "1 sacada 2,00 x 1,30"
-                    ),
-                    next_step="manual_measurements",
-                    context=context,
-                )
+                context["pending_after_color"] = "manual_measurements"
+                if chosen_plant:
+                    context["selected_plant"] = chosen_plant
+                return _send_mesh_interactive(conversation, db, context=context, company=company)
 
             all_items = [_normalize_catalog_item(i) for i in items]
             context["address_items_available"] = all_items
 
             if not show_measures:
-                # Auto-select all, skip measure list, go straight to blindex/color.
+                # Auto-select all → ask mesh+color first, then build quote
                 context["selected_items"] = all_items
                 context["selected_item_ids"] = [i.get("selection_id") for i in all_items]
                 if chosen_plant:
                     context["selected_plant"] = chosen_plant
                 _rebuild_selected_items(context)
-                note = f"Planta: *{chosen_plant}*" if chosen_plant else None
-                if _has_sacada_item(context) and not context.get("blindex_asked"):
-                    prefix = f"{note}\n\n" if note else ""
-                    return _reply_buttons(
-                        conversation, db,
-                        text=prefix + "Sua sacada possui fechamento em vidro (Blindex)?",
-                        next_step="blindex_check",
-                        context=context,
-                        buttons=[
-                            {"id": "blindex_yes", "title": "Sim, tem Blindex"},
-                            {"id": "blindex_no", "title": "Não tem"},
-                        ],
-                    )
-                return _send_color_interactive(conversation, db, context=context, company=company, note=note)
+                context["pending_after_color"] = "auto_select_all"
+                context["auto_select_plant_note"] = f"Planta: *{chosen_plant}*" if chosen_plant else None
+                return _send_mesh_interactive(conversation, db, context=context, company=company)
 
+            # show_measures=True → ask mesh+color, then show measure list
             context["selected_items"] = []
             context["selected_item_ids"] = []
-
-            rows = _build_measure_rows(all_items)
-            rows.append({"id": "pick_manual", "title": "Informar manualmente", "description": ""})
-            rows.append({"id": "pick_by_numbers", "title": "Escolher por números", "description": ""})
-
-            return _reply_list(
-                conversation,
-                db,
-                header="Itens encontrados",
-                body="Encontrei medidas salvas para esse endereço. Qual área você quer orçar?",
-                button_text="Escolher",
-                sections=[{"title": "Medidas", "rows": rows[:10]}],
-                next_step="measure_selection",
-                context=context,
-            )
+            if chosen_plant:
+                context["selected_plant"] = chosen_plant
+            context["pending_after_color"] = "measure_selection"
+            return _send_mesh_interactive(conversation, db, context=context, company=company)
 
         context["selected_items"] = []
         context["selected_item_ids"] = []
@@ -808,22 +890,8 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
     if current_step == "ask_has_measures":
         normalized = text.strip().lower()
         if normalized in {"has_measures_yes", "sim", "s", "yes", "y", "1", "sim, tenho as medidas"}:
-            return _reply_text(
-                conversation,
-                db,
-                text=(
-                    "Perfeito! Me envie as medidas dos ambientes.\n"
-                    "Você pode mandar uma por vez:\n"
-                    "1 sacada 1,20 x 1,40\n\n"
-                    "Ou várias de uma vez:\n"
-                    "1 janela sala 1,29 x 1,19\n"
-                    "1 sacada 2,00 x 1,30\n\n"
-                    "⚠️ *Importante:* Quando o instalador chegar ao local, ele irá tirar as medidas "
-                    "oficiais e pode haver alteração no orçamento."
-                ),
-                next_step="manual_measurements",
-                context=context,
-            )
+            context["pending_after_color"] = "manual_measurements"
+            return _send_mesh_interactive(conversation, db, context=context, company=company)
         return _reply_assumed(
             conversation,
             db,
@@ -877,25 +945,11 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
         context["address_items_available"] = all_items
 
         if not show_measures:
-            # Plant chosen — auto-select all measures, jump to blindex/color.
+            # Plant chosen — auto-select all measures, build quote (mesh+color already chosen).
             context["selected_items"] = all_items
             context["selected_item_ids"] = [i.get("selection_id") for i in all_items]
             _rebuild_selected_items(context)
-            if _has_sacada_item(context) and not context.get("blindex_asked"):
-                return _reply_buttons(
-                    conversation, db,
-                    text=f"Planta: *{chosen_plant}*\n\nSua sacada possui fechamento em vidro (Blindex)?",
-                    next_step="blindex_check",
-                    context=context,
-                    buttons=[
-                        {"id": "blindex_yes", "title": "Sim, tem Blindex"},
-                        {"id": "blindex_no", "title": "Não tem"},
-                    ],
-                )
-            return _send_color_interactive(
-                conversation, db, context=context, company=company,
-                note=f"Planta: *{chosen_plant}*",
-            )
+            return _build_quote_and_confirm(conversation, db, context=context, company=company)
 
         context["selected_items"] = []
         context["selected_item_ids"] = []
@@ -1034,20 +1088,7 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
                     next_step="measure_selection",
                     context=context,
                 )
-            _rebuild_selected_items(context)
-            if _has_sacada_item(context) and not context.get("blindex_asked"):
-                return _reply_buttons(
-                    conversation,
-                    db,
-                    text="Sua sacada possui fechamento em vidro (Blindex)?",
-                    next_step="blindex_check",
-                    context=context,
-                    buttons=[
-                        {"id": "blindex_yes", "title": "Sim, tem Blindex"},
-                        {"id": "blindex_no", "title": "Não tem"},
-                    ],
-                )
-            return _send_color_interactive(conversation, db, context=context, company=company)
+            return _build_quote_and_confirm(conversation, db, context=context, company=company)
 
         return _reply_buttons(
             conversation,
@@ -1097,20 +1138,7 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
                 ],
             )
 
-        _rebuild_selected_items(context)
-        if _has_sacada_item(context) and not context.get("blindex_asked"):
-            return _reply_buttons(
-                conversation,
-                db,
-                text="Sua sacada possui fechamento em vidro (Blindex)?",
-                next_step="blindex_check",
-                context=context,
-                buttons=[
-                    {"id": "blindex_yes", "title": "Sim, tem Blindex"},
-                    {"id": "blindex_no", "title": "Não tem"},
-                ],
-            )
-        return _send_color_interactive(conversation, db, context=context, company=company)
+        return _build_quote_and_confirm(conversation, db, context=context, company=company)
 
     if current_step == "manual_measurements_add_more":
         yn = _normalize_yes_no(text)
@@ -1125,19 +1153,7 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
 
         if yn == "no":
             _rebuild_selected_items(context)
-            if _has_sacada_item(context) and not context.get("blindex_asked"):
-                return _reply_buttons(
-                    conversation,
-                    db,
-                    text="Sua sacada possui fechamento em vidro (Blindex)?",
-                    next_step="blindex_check",
-                    context=context,
-                    buttons=[
-                        {"id": "blindex_yes", "title": "Sim, tem Blindex"},
-                        {"id": "blindex_no", "title": "Não tem"},
-                    ],
-                )
-            return _send_color_interactive(conversation, db, context=context, company=company)
+            return _build_quote_and_confirm(conversation, db, context=context, company=company)
 
         return _reply_buttons(
             conversation,
@@ -1173,16 +1189,65 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
             )
         context["blindex"] = (yn == "yes")
         context["blindex_asked"] = True
-        return _send_color_interactive(conversation, db, context=context, company=company)
+        return _build_quote_and_confirm(conversation, db, context=context, company=company)
 
     if current_step == "network_color":
-        colors = _build_colors(company)
+        mesh_id = context.get("mesh_type")
+        colors = _build_colors(company, mesh_id=mesh_id)
         chosen_color = _resolve_color_choice(text, colors)
         if not chosen_color:
             return _send_color_interactive(conversation, db, context=context, company=company)
 
         context["network_color"] = chosen_color.lower().strip()
-        return _send_mesh_interactive(conversation, db, context=context, company=company)
+
+        pending = context.get("pending_after_color") or ""
+        if pending == "plant_choice":
+            plant_names = context.get("address_plants") or []
+            rows = []
+            for idx, plant in enumerate(plant_names[:10], start=1):
+                rows.append({"id": f"pick_plant_{idx}", "title": plant[:24], "description": ""})
+            return _reply_list(
+                conversation, db,
+                header="Escolha a planta",
+                body="Encontrei mais de uma planta para esse endereço.\nQual é a sua planta?",
+                button_text="Ver plantas",
+                sections=[{"title": "Plantas disponíveis", "rows": rows}],
+                next_step="plant_choice",
+                context=context,
+            )
+        if pending == "measure_selection":
+            all_items = context.get("address_items_available") or []
+            rows = _build_measure_rows(all_items)
+            rows.append({"id": "pick_manual", "title": "Informar manualmente", "description": ""})
+            rows.append({"id": "pick_by_numbers", "title": "Escolher por números", "description": ""})
+            return _reply_list(
+                conversation, db,
+                header="Itens encontrados",
+                body="Encontrei medidas salvas para esse endereço. Qual área você quer orçar?",
+                button_text="Escolher",
+                sections=[{"title": "Medidas", "rows": rows[:10]}],
+                next_step="measure_selection",
+                context=context,
+            )
+        if pending == "manual_measurements":
+            return _reply_text(
+                conversation, db,
+                text=(
+                    "Perfeito! Me envie as medidas dos ambientes.\n"
+                    "Você pode mandar uma por vez:\n"
+                    "1 sacada 1,20 x 1,40\n\n"
+                    "Ou várias de uma vez:\n"
+                    "1 janela sala 1,29 x 1,19\n"
+                    "1 sacada 2,00 x 1,30\n\n"
+                    "⚠️ *Importante:* Quando o instalador chegar ao local, ele irá tirar as medidas "
+                    "oficiais e pode haver alteração no orçamento."
+                ),
+                next_step="manual_measurements",
+                context=context,
+            )
+        if pending == "auto_select_all":
+            return _build_quote_and_confirm(conversation, db, context=context, company=company)
+        return _build_quote_and_confirm(conversation, db, context=context, company=company)
 
     if current_step == "mesh_type":
         meshes = _build_mesh_types(company)
@@ -1191,70 +1256,7 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
             return _send_mesh_interactive(conversation, db, context=context, company=company)
 
         context["mesh_type"] = chosen_mesh.lower().strip().replace(" ", "").replace("×", "x")
-
-        _rebuild_selected_items(context)
-        selected_items = context.get("selected_items") or []
-        show_measures = context.get("show_measures_to_customer", True)
-
-        if not selected_items:
-            if show_measures:
-                return _reply_text(
-                    conversation,
-                    db,
-                    text="Não encontrei nenhuma área selecionada. Escolha uma área primeiro.",
-                    next_step="measure_selection",
-                    context=context,
-                )
-            return _reply_text(
-                conversation,
-                db,
-                text="Não encontrei medidas para calcular o orçamento. Por favor, informe o endereço novamente.",
-                next_step="address_lookup",
-                context={},
-            )
-
-        rule_result = resolve_address_rule(company, context.get("address") or "")
-        color = context.get("network_color")
-        mesh_type = context.get("mesh_type")
-
-        quote_items = build_quote_items_from_selection(
-            selected_items=selected_items,
-            company=company,
-            mesh_type=mesh_type or "3x3",
-            color=color,
-            rule_result=rule_result,
-        )
-        totals = calculate_quote_totals(
-            company=company,
-            items=quote_items,
-            rule_result=rule_result,
-        )
-        context["quote_preview"] = {
-            "items": quote_items,
-            "totals": totals,
-        }
-
-        summary = _build_quote_confirmation_text(
-            client_name=context.get("customer_name") or getattr(client, "name", None),
-            address=context.get("address") or "",
-            selected_items=selected_items,
-            color=color,
-            mesh_type=mesh_type,
-            totals=totals,
-            show_measures=show_measures,
-        )
-
-        return _reply_buttons(
-            conversation,
-            db,
-            text=summary,
-            next_step="quote_confirm",
-            context=context,
-            buttons=[
-                {"id": "quote_confirm_yes", "title": "Confirmar"},
-                {"id": "quote_confirm_edit", "title": "Alterar"},
-            ],
-        )
+        return _send_color_interactive(conversation, db, context=context, company=company)
 
     if current_step == "quote_confirm":
         normalized = (text or "").strip().lower()

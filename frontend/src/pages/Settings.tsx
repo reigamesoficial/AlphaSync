@@ -33,6 +33,13 @@ const TONE_OPTIONS = ['amigável', 'profissional', 'objetivo', 'técnico', 'desc
 
 type Tab = 'empresa' | 'protection_network' | 'agendamento' | 'fluxo_bot' | 'garantia'
 
+interface MeshEntry {
+  id: string
+  label: string
+  active: boolean
+  colors: string[]
+}
+
 interface SectionProps { title: string; icon: React.ReactNode; children: React.ReactNode }
 function Section({ title, icon, children }: SectionProps) {
   return (
@@ -130,6 +137,10 @@ export default function Settings() {
     signature: '',
   })
   const [savingWarranty, setSavingWarranty] = useState(false)
+  const [meshCatalog, setMeshCatalog] = useState<MeshEntry[]>([])
+  const [savingMesh, setSavingMesh] = useState(false)
+  const [newMeshId, setNewMeshId] = useState('')
+  const [newMeshLabel, setNewMeshLabel] = useState('')
 
   useEffect(() => {
     Promise.all([getCompanySettings(), getPNSettings()])
@@ -149,6 +160,13 @@ export default function Settings() {
           whatsapp_phone_number_id: s.whatsapp_phone_number_id ?? '',
         })
         setPnForm({ ...pn })
+        const catalog = (s.extra_settings as { mesh_catalog?: MeshEntry[] } | undefined)?.mesh_catalog
+        if (catalog && Array.isArray(catalog) && catalog.length > 0) {
+          setMeshCatalog(catalog)
+        } else {
+          const meshTypes: string[] = Array.isArray(pn.available_mesh_types) ? pn.available_mesh_types : []
+          setMeshCatalog(meshTypes.map((id) => ({ id, label: id, active: true, colors: [] })))
+        }
       })
       .catch(() => setToast({ type: 'error', msg: 'Erro ao carregar configurações.' }))
       .finally(() => setLoading(false))
@@ -288,6 +306,27 @@ export default function Settings() {
     } finally {
       setSavingWarranty(false)
     }
+  }
+
+  async function handleSaveMeshCatalog() {
+    setSavingMesh(true)
+    try {
+      await updateCompanySettings({ extra_settings: { mesh_catalog: meshCatalog } } as any)
+      showToast('success', 'Catálogo de malhas salvo!')
+    } catch {
+      showToast('error', 'Erro ao salvar catálogo de malhas.')
+    } finally {
+      setSavingMesh(false)
+    }
+  }
+
+  function addMeshEntry() {
+    const id = newMeshId.trim().toLowerCase().replace(/\s+/g, '')
+    const label = newMeshLabel.trim() || id
+    if (!id || meshCatalog.some(m => m.id === id)) return
+    setMeshCatalog(prev => [...prev, { id, label, active: true, colors: [] }])
+    setNewMeshId('')
+    setNewMeshLabel('')
   }
 
   function field(key: keyof CompanySettings) {
@@ -553,6 +592,84 @@ export default function Settings() {
                   )}
                 </button>
               </div>
+
+              <Section title="Catálogo de Malhas" icon={<Shield className="w-4 h-4" />}>
+                <p className="text-slate-500 text-xs mb-4">Defina as malhas disponíveis com rótulos amigáveis e cores específicas por malha. Usado no bot para exibir opções ao cliente.</p>
+                <div className="space-y-3">
+                  {meshCatalog.map((mesh, idx) => (
+                    <div key={mesh.id} className={`rounded-xl border p-4 space-y-3 ${mesh.active ? 'border-surface-600 bg-surface-800' : 'border-surface-700 opacity-60'}`}>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <button
+                            onClick={() => setMeshCatalog(prev => prev.map((m, i) => i === idx ? { ...m, active: !m.active } : m))}
+                            className={`w-9 h-5 rounded-full transition-colors flex items-center shrink-0 ${mesh.active ? 'bg-emerald-500 justify-end' : 'bg-slate-600 justify-start'}`}
+                          >
+                            <span className="w-4 h-4 bg-white rounded-full mx-0.5 shadow" />
+                          </button>
+                          <span className="text-slate-400 text-xs font-mono bg-surface-700 px-2 py-0.5 rounded">{mesh.id}</span>
+                        </div>
+                        <button
+                          onClick={() => setMeshCatalog(prev => prev.filter((_, i) => i !== idx))}
+                          className="text-slate-600 hover:text-red-400 transition-colors p-1"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div>
+                        <label className="text-slate-500 text-xs mb-1 block">Rótulo exibido ao cliente</label>
+                        <input
+                          className="input text-sm"
+                          placeholder={`Ex: ${mesh.id} — Descrição amigável`}
+                          value={mesh.label}
+                          onChange={e => setMeshCatalog(prev => prev.map((m, i) => i === idx ? { ...m, label: e.target.value } : m))}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-slate-500 text-xs mb-1 block">Cores específicas desta malha (deixe vazio para usar todas)</label>
+                        <TagInput
+                          values={mesh.colors}
+                          onChange={colors => setMeshCatalog(prev => prev.map((m, i) => i === idx ? { ...m, colors } : m))}
+                          placeholder="Ex: branca, preta..."
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-4 pt-4 border-t border-surface-700">
+                  <p className="text-slate-500 text-xs mb-3 font-medium">Adicionar nova malha</p>
+                  <div className="flex gap-2 flex-wrap">
+                    <input
+                      className="input text-sm w-28"
+                      placeholder="ID (ex: 3x3)"
+                      value={newMeshId}
+                      onChange={e => setNewMeshId(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addMeshEntry() } }}
+                    />
+                    <input
+                      className="input text-sm flex-1 min-w-[160px]"
+                      placeholder="Rótulo (ex: 3x3 — Gatos e pássaros)"
+                      value={newMeshLabel}
+                      onChange={e => setNewMeshLabel(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addMeshEntry() } }}
+                    />
+                    <button onClick={addMeshEntry} disabled={!newMeshId.trim()} className="btn-secondary px-4 flex items-center gap-1.5 text-sm">
+                      <Plus className="w-4 h-4" />
+                      Adicionar
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex justify-end mt-4">
+                  <button onClick={handleSaveMeshCatalog} disabled={savingMesh} className="btn-primary flex items-center gap-2 px-5">
+                    {savingMesh ? (
+                      <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Salvando...</>
+                    ) : (
+                      <><Save className="w-4 h-4" />Salvar catálogo</>
+                    )}
+                  </button>
+                </div>
+              </Section>
             </>
           )}
 

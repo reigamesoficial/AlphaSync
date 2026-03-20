@@ -6,9 +6,12 @@ import logging.config
 import sys
 import time
 
+import os
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.v1.router import api_router
 from app.core.config import settings
@@ -85,6 +88,12 @@ async def add_request_id(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Request-ID"] = request_id
     return response
+
+
+# ─── Static file serving ──────────────────────────────────────────────────────
+_storage_dir = getattr(settings, "storage_path", "storage")
+os.makedirs(_storage_dir, exist_ok=True)
+app.mount("/storage", StaticFiles(directory=_storage_dir), name="storage")
 
 
 # ─── Routers ──────────────────────────────────────────────────────────────────

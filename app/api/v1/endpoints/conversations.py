@@ -355,27 +355,35 @@ def return_conversation_to_bot(
                 "[return-to-bot] conv_id=%s confirmed_quote=%s pdf_url=%s",
                 conversation_id, quote.id if quote else None, quote.pdf_url if quote else None,
             )
-            if quote and quote.pdf_url:
-                wa.send_document(
-                    access_token=access_token,
-                    phone_number_id=phone_id,
-                    to=to_phone,
-                    document_url=quote.pdf_url,
-                    filename=f"orcamento_{quote.code or quote.id}.pdf",
-                    caption="📄 Segue o PDF do seu orçamento!",
-                )
-                sent_pdf = True
-                LOG.info("[return-to-bot] conv_id=%s PDF sent ok", conversation_id)
-            elif quote:
-                svc = ConversationService(db)
-                svc._try_send_quote_pdf(
-                    company=company,
-                    quote=quote,
-                    phone_number_id=phone_id,
-                    to_phone=to_phone,
-                )
-                sent_pdf = True
-                LOG.info("[return-to-bot] conv_id=%s PDF generated+sent ok", conversation_id)
+            if quote:
+                _pdf_url = quote.pdf_url or ""
+                _is_file_url = _pdf_url.startswith("http") and "/storage/" in _pdf_url
+                if _is_file_url:
+                    wa.send_document(
+                        access_token=access_token,
+                        phone_number_id=phone_id,
+                        to=to_phone,
+                        document_url=_pdf_url,
+                        filename=f"orcamento_{quote.code or quote.id}.pdf",
+                        caption="📄 Segue o PDF do seu orçamento!",
+                    )
+                    sent_pdf = True
+                    LOG.info("[return-to-bot] conv_id=%s PDF sent from stored url ok", conversation_id)
+                else:
+                    if _pdf_url and not _is_file_url:
+                        LOG.warning(
+                            "[return-to-bot] conv_id=%s stored pdf_url looks like API endpoint (%s), regenerating",
+                            conversation_id, _pdf_url[:60],
+                        )
+                    svc = ConversationService(db)
+                    svc._try_send_quote_pdf(
+                        company=company,
+                        quote=quote,
+                        phone_number_id=phone_id,
+                        to_phone=to_phone,
+                    )
+                    sent_pdf = True
+                    LOG.info("[return-to-bot] conv_id=%s PDF generated+sent ok", conversation_id)
         except Exception as exc:
             LOG.warning("[return-to-bot] conv_id=%s PDF send FAILED: %s", conversation_id, exc)
 

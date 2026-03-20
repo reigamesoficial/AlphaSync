@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import {
   CalendarDays, Clock, MapPin, Plus, X, User, ChevronDown,
   AlertCircle, CheckCircle2, Circle, RefreshCw, Ban,
-  UserCheck,
+  UserCheck, Trash2, Pencil,
 } from 'lucide-react'
 import Topbar from '../components/layout/Topbar'
 import { PageSpinner } from '../components/ui/Spinner'
@@ -98,6 +98,15 @@ function isToday(iso: string) {
 function todayStr() {
   return new Date().toISOString().slice(0, 10)
 }
+interface RescheduleForm {
+  date: string
+  slot_start: string
+  slot_end: string
+  assigned_installer_id: string
+}
+
+const emptyRescheduleForm: RescheduleForm = { date: '', slot_start: '', slot_end: '', assigned_installer_id: '' }
+
 export default function Schedule() {
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [clients, setClients] = useState<Client[]>([])
@@ -110,6 +119,14 @@ export default function Schedule() {
   const [toast, setToast] = useState<Toast | null>(null)
   const [slots, setSlots] = useState<SlotResponse[]>([])
   const [loadingSlots, setLoadingSlots] = useState(false)
+  const [confirmCancelId, setConfirmCancelId] = useState<number | null>(null)
+  const [cancelling, setCancelling] = useState(false)
+  const [showReschedule, setShowReschedule] = useState(false)
+  const [rescheduleAppt, setRescheduleAppt] = useState<Appointment | null>(null)
+  const [rescheduleForm, setRescheduleForm] = useState<RescheduleForm>(emptyRescheduleForm)
+  const [rescheduleSlots, setRescheduleSlots] = useState<SlotResponse[]>([])
+  const [rescheduleLoadingSlots, setRescheduleLoadingSlots] = useState(false)
+  const [rescheduleSaving, setRescheduleSaving] = useState(false)
 
   const showToast = (type: Toast['type'], msg: string) => {
     setToast({ type, msg })
@@ -148,6 +165,69 @@ export default function Schedule() {
       .catch(() => setSlots([]))
       .finally(() => setLoadingSlots(false))
   }, [form.date, form.assigned_installer_id])
+
+  useEffect(() => {
+    if (!rescheduleForm.date) { setRescheduleSlots([]); return }
+    setRescheduleLoadingSlots(true)
+    const installerId = rescheduleForm.assigned_installer_id ? Number(rescheduleForm.assigned_installer_id) : undefined
+    getAvailableSlots(rescheduleForm.date, installerId)
+      .then(setRescheduleSlots)
+      .catch(() => setRescheduleSlots([]))
+      .finally(() => setRescheduleLoadingSlots(false))
+  }, [rescheduleForm.date, rescheduleForm.assigned_installer_id])
+
+  async function handleCancel(id: number) {
+    setCancelling(true)
+    try {
+      await api.patch(`/appointments/${id}/status`, { status: 'cancelled' })
+      setConfirmCancelId(null)
+      showToast('success', 'Agendamento cancelado.')
+      load()
+    } catch {
+      showToast('error', 'Erro ao cancelar agendamento.')
+    } finally {
+      setCancelling(false)
+    }
+  }
+
+  function openReschedule(appt: Appointment) {
+    setRescheduleAppt(appt)
+    setRescheduleForm({
+      date: appt.start_at.slice(0, 10),
+      slot_start: '',
+      slot_end: '',
+      assigned_installer_id: appt.assigned_installer_id ? String(appt.assigned_installer_id) : '',
+    })
+    setRescheduleSlots([])
+    setShowReschedule(true)
+  }
+
+  async function handleReschedule() {
+    if (!rescheduleAppt || !rescheduleForm.slot_start || !rescheduleForm.slot_end) {
+      showToast('error', 'Selecione uma data e horário.')
+      return
+    }
+    setRescheduleSaving(true)
+    try {
+      await api.patch(`/appointments/${rescheduleAppt.id}`, {
+        start_at: rescheduleForm.slot_start,
+        end_at: rescheduleForm.slot_end,
+        assigned_installer_id: rescheduleForm.assigned_installer_id ? Number(rescheduleForm.assigned_installer_id) : undefined,
+      })
+      await api.patch(`/appointments/${rescheduleAppt.id}/status`, {
+        status: 'rescheduled',
+        reschedule_reason: 'Reagendado pelo painel',
+      })
+      setShowReschedule(false)
+      showToast('success', 'Agendamento reagendado com sucesso.')
+      load()
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      showToast('error', msg || 'Erro ao reagendar.')
+    } finally {
+      setRescheduleSaving(false)
+    }
+  }
 
   function openModal() {
     setForm(emptyForm)
@@ -343,6 +423,25 @@ export default function Schedule() {
                             {a.notes}
                           </p>
                         )}
+
+                        {['scheduled', 'rescheduled', 'pending'].includes(a.status) && (
+                          <div className="mt-3 pt-3 border-t border-surface-700 flex items-center gap-2">
+                            <button
+                              onClick={() => openReschedule(a)}
+                              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-brand-600/10 text-brand-400 hover:bg-brand-600/20 border border-brand-500/20 transition-colors font-medium"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                              Reagendar
+                            </button>
+                            <button
+                              onClick={() => setConfirmCancelId(a.id)}
+                              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition-colors font-medium"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Cancelar
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       {a.valor && (
@@ -489,6 +588,113 @@ export default function Schedule() {
                 >
                   {saving ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : null}
                   {saving ? 'Salvando...' : 'Criar agendamento'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmCancelId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !cancelling && setConfirmCancelId(null)} />
+          <div className="relative bg-surface-800 rounded-2xl border border-surface-600 w-full max-w-sm shadow-2xl p-6">
+            <div className="w-12 h-12 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-6 h-6 text-red-400" />
+            </div>
+            <h3 className="text-white font-semibold text-center mb-2">Cancelar agendamento</h3>
+            <p className="text-slate-400 text-sm text-center mb-6">Tem certeza que deseja cancelar este agendamento? Esta ação não pode ser desfeita.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmCancelId(null)} disabled={cancelling} className="btn-secondary flex-1">Voltar</button>
+              <button
+                onClick={() => handleCancel(confirmCancelId)}
+                disabled={cancelling}
+                className="flex-1 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-medium text-sm transition-colors flex items-center justify-center gap-2"
+              >
+                {cancelling ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : null}
+                {cancelling ? 'Cancelando...' : 'Sim, cancelar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showReschedule && rescheduleAppt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !rescheduleSaving && setShowReschedule(false)} />
+          <div className="relative bg-surface-800 rounded-2xl border border-surface-600 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-5 border-b border-surface-600 sticky top-0 bg-surface-800 rounded-t-2xl z-10">
+              <h3 className="text-white font-semibold">Reagendar visita</h3>
+              <button onClick={() => setShowReschedule(false)} className="text-slate-500 hover:text-white transition-colors p-1 rounded-lg hover:bg-surface-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-slate-400 text-sm font-medium mb-1.5">Instalador</label>
+                <div className="relative">
+                  <select
+                    className="input pr-8 appearance-none"
+                    value={rescheduleForm.assigned_installer_id}
+                    onChange={e => { setRescheduleForm({ ...rescheduleForm, assigned_installer_id: e.target.value, slot_start: '', slot_end: '' }); setRescheduleSlots([]) }}
+                  >
+                    <option value="">Qualquer disponível</option>
+                    {installers.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                  </select>
+                  <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-slate-400 text-sm font-medium mb-1.5">Nova data *</label>
+                <input
+                  type="date"
+                  className="input"
+                  min={todayStr()}
+                  value={rescheduleForm.date}
+                  onChange={e => setRescheduleForm({ ...rescheduleForm, date: e.target.value, slot_start: '', slot_end: '' })}
+                />
+              </div>
+              {rescheduleForm.date && (
+                <div>
+                  <label className="block text-slate-400 text-sm font-medium mb-2">Horário disponível *</label>
+                  {rescheduleLoadingSlots ? (
+                    <div className="flex justify-center py-4"><PageSpinner /></div>
+                  ) : rescheduleSlots.length === 0 ? (
+                    <p className="text-slate-500 text-sm">Nenhum horário disponível para esta data.</p>
+                  ) : (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                      {rescheduleSlots.map(slot => {
+                        const isSelected = slot.start_at === rescheduleForm.slot_start
+                        return (
+                          <button
+                            key={slot.start_at}
+                            onClick={() => slot.available && setRescheduleForm({ ...rescheduleForm, slot_start: slot.start_at, slot_end: slot.end_at })}
+                            className={`rounded-xl border px-2 py-2 text-sm text-center transition-all ${
+                              isSelected
+                                ? 'bg-brand-600 border-brand-500 text-white'
+                                : slot.available
+                                ? 'bg-surface-700 border-surface-600 text-slate-300 hover:border-brand-500/50 hover:text-white'
+                                : 'bg-surface-800 border-surface-700 text-slate-700 cursor-not-allowed'
+                            }`}
+                          >
+                            <div className="font-medium">{formatTime(slot.start_at)}</div>
+                            {!slot.available && <div className="text-[10px] text-slate-600 mt-0.5">Ocupado</div>}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="flex gap-3 pt-1">
+                <button onClick={() => setShowReschedule(false)} className="btn-secondary flex-1">Cancelar</button>
+                <button
+                  onClick={handleReschedule}
+                  disabled={rescheduleSaving || !rescheduleForm.slot_start}
+                  className="btn-primary flex-1 flex items-center justify-center gap-2"
+                >
+                  {rescheduleSaving ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : null}
+                  {rescheduleSaving ? 'Salvando...' : 'Confirmar reagendamento'}
                 </button>
               </div>
             </div>

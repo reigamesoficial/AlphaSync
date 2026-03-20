@@ -212,7 +212,7 @@ def update_appointment(
     appointment_id: int,
     payload: AppointmentUpdate,
     tenant_company_id: int = Depends(get_tenant_company_id),
-    current_user: User = Depends(require_company_admin_or_master),
+    current_user: User = Depends(require_admin_seller_or_master),
     db: Session = Depends(get_db),
 ) -> AppointmentResponse:
     repo = AppointmentsRepository(db)
