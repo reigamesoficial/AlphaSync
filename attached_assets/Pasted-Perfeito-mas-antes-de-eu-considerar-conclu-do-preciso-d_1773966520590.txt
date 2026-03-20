@@ -1,0 +1,88 @@
+Perfeito, mas antes de eu considerar concluído, preciso de uma validação final explícita e técnica.
+
+Quero que você revise e confirme os pontos abaixo com objetividade, porque já tivemos casos em que “estava implementado” mas o ramo real em produção ainda caía no comportamento antigo.
+
+VALIDAÇÃO FINAL OBRIGATÓRIA
+
+1. Nada provisório / nada hardcoded
+Confirme explicitamente que:
+- você NÃO implementou solução provisória
+- você NÃO deixou fallback hardcoded para malha/cor/preço
+- você NÃO criou remendo só para passar no fluxo atual
+- você NÃO depende de texto fixo ou listas fixas quando isso deveria vir do cadastro do admin empresa
+
+Quero uma resposta objetiva dizendo:
+- o que vem do banco
+- o que vem do painel admin empresa
+- o que ainda está fixo por regra de negócio legítima
+- o que NÃO está hardcoded
+
+2. Fluxo de malha e cor 100% orientado pelo admin empresa
+Confirme explicitamente que o fluxo agora funciona assim:
+- o bot lê do cadastro da empresa quais malhas estão ativas
+- o bot mostra ao cliente apenas as malhas ativas
+- após o cliente escolher a malha, o bot lê do cadastro quais cores existem para aquela malha
+- o bot mostra apenas as cores disponíveis para aquela malha
+- o orçamento usa o preço por m² daquela malha conforme cadastro do admin empresa
+- se o admin alterar malha/cor/preço no painel, o bot reflete isso automaticamente sem precisar alterar código
+
+Quero que você diga exatamente:
+- qual model/tabela/campo é a fonte de verdade das malhas
+- qual model/tabela/campo é a fonte de verdade das cores por malha
+- qual model/tabela/campo é a fonte de verdade do preço por m² por malha
+
+3. Validação contra os erros anteriores
+Quero confirmação explícita de que você revisou para não repetir os mesmos tipos de problema que já tivemos:
+- variável usada fora do escopo (como aconteceu com normalized)
+- race condition entre mudança de step e webhook
+- branch errado do fluxo continuando a rodar
+- payload inválido da Meta por excesso de caracteres
+- retorno silencioso sem log útil
+- fluxo aparentemente corrigido em teoria, mas não no caminho real executado
+
+Diga explicitamente:
+- o que foi validado contra cada um desses riscos
+- onde foram adicionados logs ou proteções
+- onde você garantiu persistência correta do step/context antes de disparar mensagens
+
+4. Consistência de produção
+Quero confirmação explícita de que o fluxo real agora está coerente em produção nos seguintes cenários:
+
+Cenário A
+- cliente escolhe malha
+- cliente escolhe cor compatível com a malha
+- fluxo continua normalmente
+- orçamento usa preço correto da malha
+
+Cenário B
+- admin empresa altera malha/cor/preço
+- cliente inicia nova conversa
+- bot já reflete essas mudanças automaticamente
+
+Cenário C
+- vendedor/admin gera orçamento
+- cliente recebe PDF correto
+- retorno ao bot continua funcionando
+- agendamento continua funcionando
+
+Cenário D
+- cancelar e reagendar no painel
+- vendedor/admin empresa conseguem executar
+- banco, painel e fluxo permanecem consistentes
+
+5. Entrega de garantia técnica
+Antes de encerrar, quero que você me responda em formato direto:
+
+- O que foi implementado de forma definitiva
+- O que depende do cadastro do admin empresa
+- O que continua como regra fixa legítima do sistema
+- Quais arquivos garantem que malha/cor/preço não estão hardcoded
+- Quais arquivos garantem que os erros antigos não se repetem
+- Se ainda existir qualquer ponto provisório, diga explicitamente qual é
+
+IMPORTANTE
+Não quero resposta genérica do tipo “está tudo funcionando”.
+Quero uma validação técnica final, objetiva, deixando claro que:
+- não há solução provisória
+- o fluxo de malha/cor é realmente orientado pelo admin empresa
+- você revisou para não cair nos mesmos erros que já tivemos antes
