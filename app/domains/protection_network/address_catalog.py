@@ -54,6 +54,66 @@ def _plant_sort_key(item: PNAddressPlant) -> tuple[int, int]:
     return (item.sort_order or 0, item.id or 0)
 
 
+def _normalize_tipo_label(tipo: str | None) -> str:
+    raw = (tipo or "").strip().lower()
+    if not raw:
+        return "item"
+    if raw in {"janela", "janelas"}:
+        return "janela"
+    if raw in {"porta", "portas"}:
+        return "porta"
+    if raw in {"sacada", "sacadas"}:
+        return "sacada"
+    if raw in {"sacada_l", "sacada l", "sacada-l"}:
+        return "sacada_L"
+    return raw
+
+
+def _pluralize_tipo(tipo: str, quantity: int) -> str:
+    base = _normalize_tipo_label(tipo)
+
+    if quantity <= 1:
+        return base
+
+    if base == "janela":
+        return "janelas"
+    if base == "porta":
+        return "portas"
+    if base == "sacada":
+        return "sacadas"
+    if base == "sacada_L":
+        return "sacadas_L"
+
+    if base.endswith("s"):
+        return base
+    return f"{base}s"
+
+
+def _clean_descricao_for_tipo(tipo: str | None, descricao: str | None) -> str:
+    desc = (descricao or "").strip()
+    if not desc:
+        return ""
+
+    normalized_tipo = _normalize_tipo_label(tipo)
+
+    if normalized_tipo == "sacada_L":
+        desc = re.sub(r"^\s*sacada(?:[_\s-]*l)?\s*", "", desc, flags=re.I)
+    else:
+        desc = re.sub(rf"^\s*{re.escape(normalized_tipo)}s?\s*", "", desc, flags=re.I)
+
+    desc = re.sub(r"\s+", " ", desc).strip(" -_,;")
+    return desc
+
+
+def _build_item_label(tipo: str | None, descricao: str | None, quantity: int = 1) -> str:
+    tipo_base = _pluralize_tipo(tipo or "item", quantity)
+    desc_clean = _clean_descricao_for_tipo(tipo, descricao)
+
+    if desc_clean:
+        return f"{tipo_base} {desc_clean}".strip()
+    return tipo_base.strip()
+
+
 @dataclass(slots=True)
 class AddressMeasureItem:
     legacy_id: int
@@ -71,26 +131,23 @@ class AddressMeasureItem:
         return f"medida_{self.legacy_id}"
 
     def label(self) -> str:
-        tipo = (self.tipo or "").strip().lower()
-        desc = (self.descricao or "").strip()
-        if desc:
-            return f"{tipo} {desc}".strip()
-        return tipo or "item"
+        return _build_item_label(self.tipo, self.descricao, 1)
 
     def summary(self) -> str:
+        base = self.label()
         if self.largura_m is not None and self.altura_m is not None:
-            return f"{self.label()} {self.largura_m:.2f} x {self.altura_m:.2f}"
+            return f"{base} {self.largura_m:.2f} x {self.altura_m:.2f}"
         if self.lado_a_m is not None and self.lado_b_m is not None and self.altura_m is not None:
-            return f"{self.label()} {self.lado_a_m:.2f} x {self.lado_b_m:.2f} x {self.altura_m:.2f}"
-        return self.label()
+            return f"{base} {self.lado_a_m:.2f} x {self.lado_b_m:.2f} x {self.altura_m:.2f}"
+        return base
 
     def to_quote_item_dict(self) -> dict[str, Any]:
         width = self.largura_m if self.largura_m is not None else self.lado_a_m
         height = self.altura_m if self.altura_m is not None else self.lado_b_m
         return {
             "legacy_id": self.legacy_id,
-            "tipo": (self.tipo or "").strip().lower(),
-            "descricao": (self.descricao or "").strip(),
+            "tipo": _normalize_tipo_label(self.tipo),
+            "descricao": _clean_descricao_for_tipo(self.tipo, self.descricao),
             "width": width,
             "height": height,
             "lado_a_m": self.lado_a_m,
@@ -316,9 +373,9 @@ def parse_manual_measurements_block(text: str) -> list[dict[str, Any]]:
             if tipo_match:
                 tipo = "sacada"
             else:
-                tipo_match = re.search(r"\b(janela|janelas)\b", s, flags=re.I)
+                tipo_match = re.search(r"\b(janela|janelas|porta|portas)\b", s, flags=re.I)
                 if tipo_match:
-                    tipo = "janela"
+                    tipo = _normalize_tipo_label(tipo_match.group(1))
 
         if not tipo or not tipo_match:
             continue
@@ -339,33 +396,40 @@ def parse_manual_measurements_block(text: str) -> list[dict[str, Any]]:
         desc = re.sub(r"\d+(?:[.,]\d+)?", " ", rest)
         desc = re.sub(r"[xX;]", " ", desc)
         desc = re.sub(r"\s+", " ", desc).strip()
+        desc = _clean_descricao_for_tipo(tipo, desc)
 
-        for _ in range(qty):
-            parsed.append(
-                {
-                    "legacy_id": None,
-                    "tipo": tipo,
-                    "descricao": desc,
-                    "width": width,
-                    "height": height,
-                    "lado_a_m": None,
-                    "lado_b_m": None,
-                    "observacao": "",
-                    "planta": None,
-                    "source": "manual",
-                }
-            )
+        parsed.append(
+            {
+                "legacy_id": None,
+                "tipo": _normalize_tipo_label(tipo),
+                "descricao": desc,
+                "width": width,
+                "height": height,
+                "lado_a_m": None,
+                "lado_b_m": None,
+                "observacao": "",
+                "planta": None,
+                "quantity": qty,
+                "source": "manual",
+            }
+        )
 
     return parsed
 
 
 def format_measure_choice_title(item: dict[str, Any]) -> str:
-    tipo = (item.get("tipo") or "item").strip().lower()
-    descricao = (item.get("descricao") or "").strip()
+    tipo = _normalize_tipo_label(item.get("tipo") or "item")
+    descricao = _clean_descricao_for_tipo(tipo, item.get("descricao"))
     width = item.get("width")
     height = item.get("height")
+    quantity = int(item.get("quantity") or 1)
 
-    base = f"{tipo} {descricao}".strip()
+    base = _build_item_label(tipo, descricao, quantity)
+
     if width is not None and height is not None:
-        return f"{base} {width:.2f}x{height:.2f}"[:24]
+        try:
+            return f"{base} {float(width):.2f}x{float(height):.2f}"[:24]
+        except Exception:
+            return base[:24]
+
     return base[:24]
