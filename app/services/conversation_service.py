@@ -132,7 +132,6 @@ class ConversationService:
 
         return normalized
 
-
     def _merge_bot_context(
         self,
         *,
@@ -653,6 +652,8 @@ class ConversationService:
         to_phone: str,
     ) -> None:
         try:
+            import requests
+
             from app.core.config import settings as app_settings
             from app.services.pdf_service import generate_quote_pdf
 
@@ -685,6 +686,7 @@ class ConversationService:
             code = getattr(quote, "code", None) or str(quote.id)
             filename = f"orcamento_{code}.pdf"
             pdf_path = os.path.join(pdf_dir, filename)
+
             with open(pdf_path, "wb") as f:
                 f.write(pdf_bytes)
 
@@ -699,6 +701,30 @@ class ConversationService:
                 return
 
             pdf_url = f"{media_base_url.rstrip('/')}/storage/quotes/{company.id}/{filename}"
+
+            try:
+                resp = requests.get(pdf_url, timeout=5)
+                content_type = resp.headers.get("Content-Type", "")
+
+                if "application/pdf" not in content_type.lower():
+                    logger.error(
+                        "Arquivo NÃO está sendo servido como PDF. URL: %s | Content-Type: %s",
+                        pdf_url,
+                        content_type,
+                    )
+                    return
+
+                if not resp.content.startswith(b"%PDF"):
+                    logger.error(
+                        "Arquivo acessado pela URL não possui assinatura PDF válida. URL: %s",
+                        pdf_url,
+                    )
+                    return
+
+            except Exception as e:
+                logger.error("Erro ao validar PDF URL: %s", e)
+                return
+
             quote.pdf_url = pdf_url
             self.db.flush()
 
@@ -717,13 +743,13 @@ class ConversationService:
                 caption=f"Aqui está o seu orçamento, {client_name}! 📄",
             )
             logger.info(
-                "PDF sent via WhatsApp to %s for quote %s (company %s)",
+                "PDF enviado com sucesso via WhatsApp para %s | quote %s | company %s",
                 to_phone, quote.id, company.id,
             )
 
         except Exception as exc:
             logger.exception(
-                "Failed to send quote PDF via WhatsApp to %s for company %s: %s",
+                "Falha ao enviar PDF via WhatsApp para %s | company %s: %s",
                 to_phone, company.id, exc,
             )
 
