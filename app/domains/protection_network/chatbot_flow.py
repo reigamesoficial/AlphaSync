@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import logging
@@ -163,30 +162,31 @@ def _normalize_catalog_item(item: Any) -> dict[str, Any]:
         return item
 
     normalized: dict[str, Any] = {}
-    if hasattr(item, 'to_quote_item_dict'):
+    if hasattr(item, "to_quote_item_dict"):
         try:
             normalized.update(item.to_quote_item_dict())
         except Exception:
             pass
 
-    if hasattr(item, 'selection_id'):
+    if hasattr(item, "selection_id"):
         try:
             sel = item.selection_id() if callable(item.selection_id) else item.selection_id
-            normalized['selection_id'] = sel
+            normalized["selection_id"] = sel
         except Exception:
             pass
 
     field_map = {
-        'legacy_id': ['legacy_id', 'id'],
-        'tipo': ['tipo', 'type'],
-        'descricao': ['descricao', 'description', 'label'],
-        'width': ['width', 'width_m', 'lado_a_m'],
-        'height': ['height', 'height_m', 'lado_b_m'],
-        'lado_a_m': ['lado_a_m'],
-        'lado_b_m': ['lado_b_m'],
-        'observacao': ['observacao', 'notes'],
-        'planta': ['planta', 'plant'],
-        'source': ['source'],
+        "legacy_id": ["legacy_id", "id"],
+        "tipo": ["tipo", "type"],
+        "descricao": ["descricao", "description", "label"],
+        "width": ["width", "width_m", "lado_a_m"],
+        "height": ["height", "height_m", "lado_b_m"],
+        "lado_a_m": ["lado_a_m"],
+        "lado_b_m": ["lado_b_m"],
+        "observacao": ["observacao", "notes"],
+        "planta": ["planta", "plant"],
+        "source": ["source"],
+        "quantity": ["quantity", "qty"],
     }
     for target, candidates in field_map.items():
         if target in normalized and normalized[target] is not None:
@@ -200,12 +200,13 @@ def _normalize_catalog_item(item: Any) -> dict[str, Any]:
                 except Exception:
                     continue
 
-    if 'selection_id' not in normalized:
-        legacy_id = normalized.get('legacy_id')
+    if "selection_id" not in normalized:
+        legacy_id = normalized.get("legacy_id")
         if legacy_id is not None:
-            normalized['selection_id'] = f'medida_{legacy_id}'
+            normalized["selection_id"] = f"medida_{legacy_id}"
 
-    normalized.setdefault('source', 'address_catalog')
+    normalized.setdefault("source", "address_catalog")
+    normalized.setdefault("quantity", 1)
     return normalized
 
 
@@ -458,7 +459,6 @@ def _resolve_plant_choice(text: str, plant_names: list[str]) -> str | None:
     if not plant_names:
         return None
 
-    # pick_plant_N — interactive list reply ID
     if text.startswith("pick_plant_"):
         try:
             idx = int(text.replace("pick_plant_", "", 1)) - 1
@@ -467,7 +467,6 @@ def _resolve_plant_choice(text: str, plant_names: list[str]) -> str | None:
         except ValueError:
             pass
 
-    # planta_{name} — legacy format
     if text.startswith("planta_"):
         candidate = text.replace("planta_", "", 1)
         for plant in plant_names:
@@ -652,13 +651,93 @@ def _format_money_br(value: Any) -> str:
     return s.replace(",", "X").replace(".", ",").replace("X", ".")
 
 
-def _build_selected_items_summary(selected_items: list[dict[str, Any]]) -> str:
-    lines = []
-    for idx, item in enumerate(selected_items, start=1):
-        desc = (item.get("descricao") or item.get("tipo") or f"item {idx}").strip()
+def _normalize_tipo_label(tipo: str | None) -> str:
+    raw = (tipo or "").strip().lower()
+    if not raw:
+        return "item"
+    if raw in {"janela", "janelas"}:
+        return "janela"
+    if raw in {"porta", "portas"}:
+        return "porta"
+    if raw in {"sacada", "sacadas"}:
+        return "sacada"
+    if raw in {"sacada_l", "sacada l", "sacada-l"}:
+        return "sacada_L"
+    return raw
+
+
+def _pluralize_tipo(tipo: str | None, quantity: int) -> str:
+    base = _normalize_tipo_label(tipo)
+    if quantity <= 1:
+        return base
+    if base == "janela":
+        return "janelas"
+    if base == "porta":
+        return "portas"
+    if base == "sacada":
+        return "sacadas"
+    if base == "sacada_L":
+        return "sacadas_L"
+    if base.endswith("s"):
+        return base
+    return f"{base}s"
+
+
+def _clean_descricao_for_tipo(tipo: str | None, descricao: str | None) -> str:
+    desc = (descricao or "").strip()
+    if not desc:
+        return ""
+
+    normalized_tipo = _normalize_tipo_label(tipo)
+
+    if normalized_tipo == "sacada_L":
+        import re
+        desc = re.sub(r"^\s*sacada(?:[_\s-]*l)?\s*", "", desc, flags=re.I)
+    else:
+        import re
+        desc = re.sub(rf"^\s*{re.escape(normalized_tipo)}s?\s*", "", desc, flags=re.I)
+
+    import re
+    desc = re.sub(r"\s+", " ", desc).strip(" -_,;")
+    return desc
+
+
+def _format_dimension_value(value: Any) -> str:
+    try:
+        return f"{float(value):.2f}".replace(",", ".")
+    except Exception:
+        return "0.00"
+
+
+def _build_selected_item_label(item: dict[str, Any], include_dimensions: bool = True) -> str:
+    quantity = int(item.get("quantity") or 1)
+    tipo = _normalize_tipo_label(item.get("tipo") or "item")
+    descricao = _clean_descricao_for_tipo(tipo, item.get("descricao"))
+
+    base_tipo = _pluralize_tipo(tipo, quantity)
+    if quantity > 1:
+        base = f"{quantity} {base_tipo}"
+    else:
+        base = base_tipo
+
+    if descricao:
+        base = f"{base} {descricao}".strip()
+
+    if include_dimensions:
         width = item.get("width")
         height = item.get("height")
-        lines.append(f"{idx}. {desc} — {width} x {height} m")
+        if width is not None and height is not None:
+            base = f"{base} — {_format_dimension_value(width)} x {_format_dimension_value(height)} m"
+
+    return base.strip()
+
+
+def _build_selected_items_summary(selected_items: list[dict[str, Any]]) -> str:
+    lines = []
+    for idx, raw_item in enumerate(selected_items, start=1):
+        item = _normalize_catalog_item(raw_item)
+        label = _build_selected_item_label(item, include_dimensions=True)
+        lines.append(f"{idx}. {label}")
     return "\n".join(lines)
 
 
@@ -758,7 +837,7 @@ def _compute_slots(target_date, cfg: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _compute_available_days(cfg: dict[str, Any], days_ahead: int = 21) -> list[dict[str, Any]]:
-    from datetime import date as _date, datetime as _dt, timedelta as _td
+    from datetime import datetime as _dt, timedelta as _td
     WEEKDAYS_SHORT = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
     today = _dt.today().date()
     days: list[dict[str, Any]] = []
@@ -962,7 +1041,6 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
             plants = lookup_result.get("plants", {}) or {}
             plant_names = list(plants.keys())
 
-            # Multiple plants → ask mesh+color first, then plant choice
             if len(plant_names) > 1:
                 context["address_plants"] = plant_names
                 context["selected_items"] = []
@@ -970,12 +1048,10 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
                 context["pending_after_color"] = "plant_choice"
                 return _send_mesh_interactive(conversation, db, context=context, company=company)
 
-            # Single plant (or no plant grouping)
             chosen_plant = plant_names[0] if plant_names else None
             items = _items_from_catalog_lookup(lookup_result, chosen_plant)
 
             if not items:
-                # Address found but no items → ask mesh+color first, then manual measurements
                 context["selected_items"] = []
                 context["selected_item_ids"] = []
                 context["pending_after_color"] = "manual_measurements"
@@ -987,7 +1063,6 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
             context["address_items_available"] = all_items
 
             if not show_measures:
-                # Auto-select all → ask mesh+color first, then build quote
                 context["selected_items"] = all_items
                 context["selected_item_ids"] = [i.get("selection_id") for i in all_items]
                 if chosen_plant:
@@ -997,7 +1072,6 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
                 context["auto_select_plant_note"] = f"Planta: *{chosen_plant}*" if chosen_plant else None
                 return _send_mesh_interactive(conversation, db, context=context, company=company)
 
-            # show_measures=True → ask mesh+color, then show measure list
             context["selected_items"] = []
             context["selected_item_ids"] = []
             if chosen_plant:
@@ -1016,7 +1090,7 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
             ),
             buttons=[
                 {"id": "has_measures_yes", "title": "Sim, tenho as medidas"},
-                {"id": "has_measures_no",  "title": "Não tenho"},
+                {"id": "has_measures_no", "title": "Não tenho"},
             ],
             next_step="ask_has_measures",
             context=context,
@@ -1043,7 +1117,6 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
         show_measures = context.get("show_measures_to_customer", True)
         chosen_plant = _resolve_plant_choice(text, plant_names)
         if not chosen_plant:
-            # Re-show the plant list so the client can pick again
             rows = []
             for idx, plant in enumerate(plant_names[:9], start=1):
                 rows.append({"id": f"pick_plant_{idx}", "title": plant[:24], "description": ""})
@@ -1081,7 +1154,6 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
         context["address_items_available"] = all_items
 
         if not show_measures:
-            # Plant chosen — auto-select all measures, build quote (mesh+color already chosen).
             context["selected_items"] = all_items
             context["selected_item_ids"] = [i.get("selection_id") for i in all_items]
             _rebuild_selected_items(context)
@@ -1637,7 +1709,6 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
             ],
         )
 
-    # ── helper: send the day-choice list ────────────────────────────────────
     def _send_day_list(body_text: str, cfg: dict[str, Any]):
         available_days = _compute_available_days(cfg)
         LOG.info(
@@ -1676,7 +1747,6 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
             context=context,
         )
 
-    # ── helper: send the slot-choice list ───────────────────────────────────
     def _send_slot_list(chosen_day: dict[str, Any], cfg: dict[str, Any]):
         from datetime import date as _date_cls
         chosen_date = _date_cls.fromisoformat(chosen_day["date"])
@@ -1701,7 +1771,6 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
             context=context,
         )
 
-    # ── helper: create appointment & confirm ────────────────────────────────
     def _confirm_appointment(chosen_slot: dict[str, Any]):
         from datetime import datetime as _dt
         from decimal import Decimal as _Decimal
@@ -1764,11 +1833,11 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
             context=context,
         )
 
-    # ── step: schedule_ask ───────────────────────────────────────────────────
     if current_step == "schedule_ask":
         LOG.info(
             "[bot:schedule_ask] conv_id=%s normalized=%r is_later=%s is_yes=%s",
-            conversation.id, normalized,
+            conversation.id,
+            normalized,
             normalized in SCHEDULE_LATER_WORDS,
             normalized in SCHEDULE_YES_WORDS,
         )
@@ -1784,7 +1853,6 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
         LOG.info("[bot:schedule_ask] conv_id=%s calling _send_day_list cfg=%s", conversation.id, cfg)
         return _send_day_list("Perfeito. Escolha um dia para a instalação:", cfg)
 
-    # ── step: schedule_day_choice ────────────────────────────────────────────
     if current_step == "schedule_day_choice":
         if _is_back_text(text):
             return _reply_previous_menu(
@@ -1813,7 +1881,6 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
         cfg = _get_schedule_cfg(company, db)
         return _send_slot_list(chosen_day, cfg)
 
-    # ── step: schedule_slot_choice (main) ───────────────────────────────────
     if current_step in ("schedule_slot_choice", "schedule_slot"):
         if _is_back_text(text):
             return _reply_previous_menu(
@@ -1850,12 +1917,10 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
             )
         return _confirm_appointment(chosen_slot)
 
-    # ── step: schedule_date (backward compat — redirect to day list) ─────────
     if current_step == "schedule_date":
         cfg = _get_schedule_cfg(company, db)
         return _send_day_list("Escolha um dia disponível para a instalação:", cfg)
 
-    # ── step: schedule_confirmed ─────────────────────────────────────────────
     if current_step == "schedule_confirmed":
         return _reply_text(
             conversation,
