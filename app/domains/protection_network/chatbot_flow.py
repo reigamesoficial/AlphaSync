@@ -31,6 +31,8 @@ YES_WORDS = {"sim", "s", "yes", "y"}
 NO_WORDS = {"nao", "não", "n", "no"}
 ALTER_WORDS = {"alterar", "mudar", "editar"}
 CONFIRM_WORDS = {"confirmar", "fechar", "seguir", "continuar"}
+BACK_WORDS = {"voltar", "volta", "anterior", "menu anterior", "retornar"}
+SELECT_ALL_WORDS = {"pick_all", "selecionar todos", "selecionar_todos", "todos", "todas", "all"}
 
 SCHEDULE_YES_WORDS = {"sim", "s", "yes", "y", "1", "schedule_yes", "agendar", "quero"}
 SCHEDULE_LATER_WORDS = {"nao", "não", "n", "no", "2", "schedule_later", "depois", "prefiro", "agora não", "agora nao"}
@@ -280,6 +282,130 @@ def _append_selected_item(context: dict[str, Any], item: dict[str, Any]) -> None
         selected.append(item)
     if selection_id and selection_id not in selected_ids:
         selected_ids.append(selection_id)
+
+
+def _select_all_available_items(context: dict[str, Any]) -> None:
+    available = context.get("address_items_available") or []
+    context["selected_items"] = []
+    context["selected_item_ids"] = []
+    for raw_item in available:
+        item = _normalize_catalog_item(raw_item)
+        _append_selected_item(context, item)
+    _rebuild_selected_items(context)
+
+
+def _build_measure_selection_rows(items: list[dict[str, Any]]) -> list[dict[str, str]]:
+    rows = _build_measure_rows(items[:6])
+    rows.append({"id": "pick_all", "title": "Selecionar todos", "description": ""})
+    rows.append({"id": "pick_manual", "title": "Informar manualmente", "description": ""})
+    rows.append({"id": "pick_by_numbers", "title": "Escolher por números", "description": ""})
+    rows.append({"id": "pick_back", "title": "Voltar", "description": ""})
+    return rows[:10]
+
+
+def _is_back_text(text: str) -> bool:
+    normalized = (text or "").strip().lower()
+    return normalized in BACK_WORDS or normalized == "pick_back"
+
+
+def _reply_previous_menu(conversation, db, *, current_step: str, context: dict[str, Any], company) -> dict[str, Any]:
+    if current_step == "plant_choice":
+        return _send_color_interactive(conversation, db, context=context, company=company, note="Voltando para a escolha de cor.")
+    if current_step == "measure_selection":
+        plant_names = context.get("address_plants") or []
+        if len(plant_names) > 1:
+            rows = [{"id": f"pick_plant_{idx}", "title": plant[:24], "description": ""} for idx, plant in enumerate(plant_names[:9], start=1)]
+            rows.append({"id": "pick_back", "title": "Voltar", "description": ""})
+            return _reply_list(
+                conversation,
+                db,
+                header="Escolha a planta",
+                body="Escolha a planta desejada.",
+                button_text="Ver plantas",
+                sections=[{"title": "Plantas disponíveis", "rows": rows[:10]}],
+                next_step="plant_choice",
+                context=context,
+            )
+        return _send_color_interactive(conversation, db, context=context, company=company, note="Voltando para a escolha de cor.")
+    if current_step == "measure_selection_numbers":
+        rows = _build_measure_selection_rows(context.get("address_items_available") or [])
+        return _reply_list(
+            conversation,
+            db,
+            header="Itens encontrados",
+            body="Escolha uma área da lista, selecione todos, informe manualmente ou escolha por números.",
+            button_text="Escolher",
+            sections=[{"title": "Medidas", "rows": rows}],
+            next_step="measure_selection",
+            context=context,
+        )
+    if current_step == "manual_measurements":
+        rows = _build_measure_selection_rows(context.get("address_items_available") or [])
+        if context.get("address_items_available"):
+            return _reply_list(
+                conversation,
+                db,
+                header="Itens encontrados",
+                body="Voltando ao menu de seleção de áreas.",
+                button_text="Escolher",
+                sections=[{"title": "Medidas", "rows": rows}],
+                next_step="measure_selection",
+                context=context,
+            )
+        return _reply_text(
+            conversation,
+            db,
+            text="Tudo bem. Me envie novamente o endereço completo para continuar.",
+            next_step="address_lookup",
+            context=context,
+        )
+    if current_step == "manual_measurements_add_more":
+        return _reply_text(
+            conversation,
+            db,
+            text="Pode enviar a próxima medida.",
+            next_step="manual_measurements",
+            context=context,
+        )
+    if current_step == "quote_edit_choice":
+        return _build_quote_and_confirm(conversation, db, context=context, company=company)
+    if current_step == "schedule_day_choice":
+        return _reply_buttons(
+            conversation,
+            db,
+            text="Deseja agendar a instalação agora?",
+            next_step="schedule_ask",
+            context=context,
+            buttons=[
+                {"id": "schedule_yes", "title": "Sim, agendar agora"},
+                {"id": "schedule_later", "title": "Prefiro depois"},
+            ],
+        )
+    if current_step in {"schedule_slot_choice", "schedule_slot"}:
+        return _reply_text(
+            conversation,
+            db,
+            text="Tudo bem. Vamos voltar para a escolha do dia da instalação.",
+            next_step="schedule_date",
+            context=context,
+        )
+    if current_step == "network_color":
+        return _send_mesh_interactive(conversation, db, context=context, company=company)
+    if current_step == "mesh_type":
+        return _reply_text(
+            conversation,
+            db,
+            text="Tudo bem. Me envie novamente o endereço completo do local da instalação.",
+            next_step="address_lookup",
+            context=context,
+        )
+    return _reply_text(
+        conversation,
+        db,
+        text="Vamos voltar uma etapa. Me envie novamente o endereço completo do local da instalação.",
+        next_step="address_lookup",
+        context=context,
+    )
 
 
 DEFAULT_MESH_CATALOG = [
@@ -777,6 +903,15 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
             context=context,
         )
 
+    if _is_back_text(text):
+        return _reply_previous_menu(
+            conversation,
+            db,
+            current_step=current_step,
+            context=context,
+            company=company,
+        )
+
     if current_step in {"", "start"}:
         context = {}
         return _reply_text(
@@ -910,8 +1045,9 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
         if not chosen_plant:
             # Re-show the plant list so the client can pick again
             rows = []
-            for idx, plant in enumerate(plant_names[:10], start=1):
+            for idx, plant in enumerate(plant_names[:9], start=1):
                 rows.append({"id": f"pick_plant_{idx}", "title": plant[:24], "description": ""})
+            rows.append({"id": "pick_back", "title": "Voltar", "description": ""})
             return _reply_list(
                 conversation,
                 db,
@@ -954,9 +1090,7 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
         context["selected_items"] = []
         context["selected_item_ids"] = []
 
-        rows = _build_measure_rows(all_items)
-        rows.append({"id": "pick_manual", "title": "Informar manualmente", "description": ""})
-        rows.append({"id": "pick_by_numbers", "title": "Escolher por números", "description": ""})
+        rows = _build_measure_selection_rows(all_items)
 
         return _reply_list(
             conversation,
@@ -971,6 +1105,27 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
 
     if current_step == "measure_selection":
         items = context.get("address_items_available") or []
+
+        if text == "pick_back":
+            return _reply_previous_menu(
+                conversation,
+                db,
+                current_step=current_step,
+                context=context,
+                company=company,
+            )
+
+        if text in SELECT_ALL_WORDS:
+            _select_all_available_items(context)
+            if not (context.get("selected_items") or context.get("selected_item_ids")):
+                return _reply_text(
+                    conversation,
+                    db,
+                    text="Não encontrei áreas disponíveis para selecionar.",
+                    next_step="measure_selection",
+                    context=context,
+                )
+            return _build_quote_and_confirm(conversation, db, context=context, company=company)
 
         if text == "pick_manual":
             return _reply_text(
@@ -1017,15 +1172,28 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
                 ],
             )
 
-        return _reply_text(
+        rows = _build_measure_selection_rows(items)
+        return _reply_list(
             conversation,
             db,
-            text="Escolha uma área pelas opções enviadas ou digite o número correspondente.",
+            header="Itens encontrados",
+            body="Escolha uma área da lista, selecione todos, informe manualmente ou digite *voltar* para retornar.",
+            button_text="Escolher",
+            sections=[{"title": "Medidas", "rows": rows}],
             next_step="measure_selection",
             context=context,
         )
 
     if current_step == "measure_selection_numbers":
+        if _is_back_text(text):
+            return _reply_previous_menu(
+                conversation,
+                db,
+                current_step=current_step,
+                context=context,
+                company=company,
+            )
+
         raw = text.replace(";", ",")
         parts = [p.strip() for p in raw.split(",") if p.strip()]
         items = context.get("address_items_available") or []
@@ -1064,9 +1232,7 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
         _rebuild_selected_items(context)
         yn = _normalize_yes_no(text)
         if yn == "yes":
-            rows = _build_measure_rows(context.get("address_items_available") or [])
-            rows.append({"id": "pick_manual", "title": "Informar manualmente", "description": ""})
-            rows.append({"id": "pick_by_numbers", "title": "Escolher por números", "description": ""})
+            rows = _build_measure_selection_rows(context.get("address_items_available") or [])
 
             return _reply_list(
                 conversation,
@@ -1103,6 +1269,15 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
         )
 
     if current_step == "manual_measurements":
+        if _is_back_text(text):
+            return _reply_previous_menu(
+                conversation,
+                db,
+                current_step=current_step,
+                context=context,
+                company=company,
+            )
+
         parsed_items = parse_manual_measurements_block(text)
         if not parsed_items:
             return _reply_text(
@@ -1141,6 +1316,15 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
         return _build_quote_and_confirm(conversation, db, context=context, company=company)
 
     if current_step == "manual_measurements_add_more":
+        if _is_back_text(text):
+            return _reply_previous_menu(
+                conversation,
+                db,
+                current_step=current_step,
+                context=context,
+                company=company,
+            )
+
         yn = _normalize_yes_no(text)
         if yn == "yes":
             return _reply_text(
@@ -1204,8 +1388,9 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
         if pending == "plant_choice":
             plant_names = context.get("address_plants") or []
             rows = []
-            for idx, plant in enumerate(plant_names[:10], start=1):
+            for idx, plant in enumerate(plant_names[:9], start=1):
                 rows.append({"id": f"pick_plant_{idx}", "title": plant[:24], "description": ""})
+            rows.append({"id": "pick_back", "title": "Voltar", "description": ""})
             return _reply_list(
                 conversation, db,
                 header="Escolha a planta",
@@ -1217,9 +1402,7 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
             )
         if pending == "measure_selection":
             all_items = context.get("address_items_available") or []
-            rows = _build_measure_rows(all_items)
-            rows.append({"id": "pick_manual", "title": "Informar manualmente", "description": ""})
-            rows.append({"id": "pick_by_numbers", "title": "Escolher por números", "description": ""})
+            rows = _build_measure_selection_rows(all_items)
             return _reply_list(
                 conversation, db,
                 header="Itens encontrados",
@@ -1372,6 +1555,15 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
         )
 
     if current_step == "quote_edit_choice":
+        if _is_back_text(text):
+            return _reply_previous_menu(
+                conversation,
+                db,
+                current_step=current_step,
+                context=context,
+                company=company,
+            )
+
         normalized = (text or "").strip().lower()
         show_measures = context.get("show_measures_to_customer", True)
 
@@ -1394,10 +1586,8 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
                 )
             context["selected_items"] = []
             context["selected_item_ids"] = []
-            rows = _build_measure_rows(context.get("address_items_available") or [])
+            rows = _build_measure_selection_rows(context.get("address_items_available") or [])
             if rows:
-                rows.append({"id": "pick_manual", "title": "Informar manualmente", "description": ""})
-                rows.append({"id": "pick_by_numbers", "title": "Escolher por números", "description": ""})
                 return _reply_list(
                     conversation,
                     db,
@@ -1596,6 +1786,15 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
 
     # ── step: schedule_day_choice ────────────────────────────────────────────
     if current_step == "schedule_day_choice":
+        if _is_back_text(text):
+            return _reply_previous_menu(
+                conversation,
+                db,
+                current_step=current_step,
+                context=context,
+                company=company,
+            )
+
         available_days: list = context.get("schedule_available_days") or []
         chosen_day = next(
             (d for d in available_days if d["id"] == normalized or d["label"].lower() == text.strip().lower()),
@@ -1616,6 +1815,15 @@ def handle_inbound_message(*, company, conversation, client, inbound_message, db
 
     # ── step: schedule_slot_choice (main) ───────────────────────────────────
     if current_step in ("schedule_slot_choice", "schedule_slot"):
+        if _is_back_text(text):
+            return _reply_previous_menu(
+                conversation,
+                db,
+                current_step=current_step,
+                context=context,
+                company=company,
+            )
+
         slots: list = context.get("schedule_slots") or []
         chosen_slot = next(
             (s for s in slots if s["id"] == normalized or s["label"].lower() == text.strip().lower()),
