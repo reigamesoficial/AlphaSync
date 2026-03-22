@@ -116,6 +116,19 @@ export interface Quote {
   updated_at: string
 }
 
+export interface MeshCatalogEntry {
+  id: string
+  label: string
+  active: boolean
+  colors: string[]
+  price_per_m2: number | null
+}
+
+export interface CompanyExtraSettings {
+  mesh_catalog?: MeshCatalogEntry[]
+  [key: string]: unknown
+}
+
 export interface CompanySettings {
   id: number
   company_id: number
@@ -132,7 +145,7 @@ export interface CompanySettings {
   calendar_id: string | null
   currency: string
   timezone: string
-  extra_settings: Record<string, unknown>
+  extra_settings: CompanyExtraSettings
   created_at: string
   updated_at: string
 }
@@ -213,4 +226,5 @@ export interface PNSettings {
   available_colors: string[]
   available_mesh_types: string[]
   mesh_prices: Record<string, number>
+  mesh_catalog?: MeshCatalogEntry[]
 }
