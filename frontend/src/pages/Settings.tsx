@@ -38,6 +38,7 @@ interface MeshEntry {
   label: string
   active: boolean
   colors: string[]
+  price_per_m2: number | null
 }
 
 interface SectionProps { title: string; icon: React.ReactNode; children: React.ReactNode }
@@ -107,6 +108,13 @@ function TagInput({ values, onChange, placeholder }: {
   )
 }
 
+function parseOptionalNumber(value: string): number | null {
+  const normalized = value.trim().replace(',', '.')
+  if (!normalized) return null
+  const parsed = parseFloat(normalized)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 export default function Settings() {
   const [tab, setTab] = useState<Tab>('empresa')
   const [settings, setSettings] = useState<CompanySettings | null>(null)
@@ -162,10 +170,26 @@ export default function Settings() {
         setPnForm({ ...pn })
         const catalog = (s.extra_settings as { mesh_catalog?: MeshEntry[] } | undefined)?.mesh_catalog
         if (catalog && Array.isArray(catalog) && catalog.length > 0) {
-          setMeshCatalog(catalog)
+          setMeshCatalog(
+            catalog.map((mesh) => ({
+              id: mesh.id,
+              label: mesh.label,
+              active: mesh.active,
+              colors: Array.isArray(mesh.colors) ? mesh.colors : [],
+              price_per_m2: mesh.price_per_m2 ?? null,
+            }))
+          )
         } else {
           const meshTypes: string[] = Array.isArray(pn.available_mesh_types) ? pn.available_mesh_types : []
-          setMeshCatalog(meshTypes.map((id) => ({ id, label: id, active: true, colors: [] })))
+          setMeshCatalog(
+            meshTypes.map((id) => ({
+              id,
+              label: id,
+              active: true,
+              colors: [],
+              price_per_m2: null,
+            }))
+          )
         }
       })
       .catch(() => setToast({ type: 'error', msg: 'Erro ao carregar configurações.' }))
@@ -324,7 +348,7 @@ export default function Settings() {
     const id = newMeshId.trim().toLowerCase().replace(/\s+/g, '')
     const label = newMeshLabel.trim() || id
     if (!id || meshCatalog.some(m => m.id === id)) return
-    setMeshCatalog(prev => [...prev, { id, label, active: true, colors: [] }])
+    setMeshCatalog(prev => [...prev, { id, label, active: true, colors: [], price_per_m2: null }])
     setNewMeshId('')
     setNewMeshLabel('')
   }
@@ -594,7 +618,7 @@ export default function Settings() {
               </div>
 
               <Section title="Catálogo de Malhas" icon={<Shield className="w-4 h-4" />}>
-                <p className="text-slate-500 text-xs mb-4">Defina as malhas disponíveis com rótulos amigáveis e cores específicas por malha. Usado no bot para exibir opções ao cliente.</p>
+                <p className="text-slate-500 text-xs mb-4">Defina as malhas disponíveis com rótulos amigáveis, cores específicas e preço por m² por malha. Usado no bot para exibir opções ao cliente.</p>
                 <div className="space-y-3">
                   {meshCatalog.map((mesh, idx) => (
                     <div key={mesh.id} className={`rounded-xl border p-4 space-y-3 ${mesh.active ? 'border-surface-600 bg-surface-800' : 'border-surface-700 opacity-60'}`}>
@@ -623,6 +647,30 @@ export default function Settings() {
                           value={mesh.label}
                           onChange={e => setMeshCatalog(prev => prev.map((m, i) => i === idx ? { ...m, label: e.target.value } : m))}
                         />
+                      </div>
+                      <div>
+                        <label className="text-slate-500 text-xs mb-1 block">Preço por m² desta malha (opcional)</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">R$</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            className="input pl-9 text-sm"
+                            placeholder="Ex: 45,00"
+                            value={mesh.price_per_m2 ?? ''}
+                            onChange={e =>
+                              setMeshCatalog(prev =>
+                                prev.map((m, i) =>
+                                  i === idx ? { ...m, price_per_m2: parseOptionalNumber(e.target.value) } : m
+                                )
+                              )
+                            }
+                          />
+                        </div>
+                        <p className="text-slate-600 text-[11px] mt-1">
+                          Deixe vazio para usar o preço padrão por m².
+                        </p>
                       </div>
                       <div>
                         <label className="text-slate-500 text-xs mb-1 block">Cores específicas desta malha (deixe vazio para usar todas)</label>
