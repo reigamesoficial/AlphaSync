@@ -40,6 +40,14 @@ class CompanyResponse(CompanyBase, IDSchema, TimestampSchema):
     pass
 
 
+class MeshCatalogEntry(BaseSchema):
+    id: str = Field(min_length=1, max_length=50)
+    label: str = Field(min_length=1, max_length=150)
+    active: bool = True
+    colors: list[str] = Field(default_factory=list)
+    price_per_m2: float | None = Field(default=None, ge=0)
+
+
 class CompanySettingsBase(BaseSchema):
     brand_name: str | None = Field(default=None, max_length=150)
     primary_color: str | None = Field(default=None, max_length=20)
