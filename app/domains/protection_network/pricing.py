@@ -36,11 +36,43 @@ def normalize_color(color: str | None) -> str | None:
     return color.strip().lower()
 
 
-def get_effective_settings(company) -> dict[str, Any]:
-    extra = {}
+def _get_extra_settings(company) -> dict[str, Any]:
     if getattr(company, "settings", None) and getattr(company.settings, "extra_settings", None):
-        extra = company.settings.extra_settings or {}
+        return company.settings.extra_settings or {}
+    return {}
 
+
+def _get_mesh_catalog(company) -> list[dict[str, Any]]:
+    extra = _get_extra_settings(company)
+    mesh_catalog = extra.get("mesh_catalog") or []
+    if isinstance(mesh_catalog, list):
+        return [item for item in mesh_catalog if isinstance(item, dict)]
+    return []
+
+
+def _get_mesh_catalog_price(company, mesh_type: str) -> Decimal | None:
+    target_mesh = normalize_mesh(mesh_type)
+
+    for entry in _get_mesh_catalog(company):
+        entry_id = normalize_mesh(entry.get("id"))
+        if entry_id != target_mesh:
+            continue
+
+        raw_price = entry.get("price_per_m2")
+        if raw_price in (None, "", []):
+            return None
+
+        price = _to_decimal(raw_price, default="")
+        if price <= Decimal("0.00"):
+            return None
+
+        return _money(price)
+
+    return None
+
+
+def get_effective_settings(company) -> dict[str, Any]:
+    extra = _get_extra_settings(company)
     pricing_rules = extra.get("pricing_rules") or {}
 
     return {
@@ -70,10 +102,17 @@ def get_effective_price_per_m2(
     mesh = normalize_mesh(mesh_type)
     color_norm = normalize_color(color)
 
-    mesh_prices = config["mesh_price_overrides"] or {}
-    color_overrides = config["color_price_overrides"] or {}
+    # 1) Preço específico salvo no catálogo de malhas (novo)
+    mesh_catalog_price = _get_mesh_catalog_price(company, mesh)
+    if mesh_catalog_price is not None:
+        base_price = mesh_catalog_price
+    else:
+        # 2) Fallback para a lógica já existente
+        mesh_prices = config["mesh_price_overrides"] or {}
+        base_price = _to_decimal(mesh_prices.get(mesh, 50.0))
 
-    base_price = _to_decimal(mesh_prices.get(mesh, 50.0))
+    # 3) Mantém acréscimos por cor já existentes
+    color_overrides = config["color_price_overrides"] or {}
     if color_norm and color_norm in color_overrides:
         base_price += _to_decimal(color_overrides[color_norm])
 
@@ -130,6 +169,7 @@ def build_quote_item(
             "color": color,
             "area_m2": str(area),
             "price_per_m2": str(unit_price),
+            "mesh_catalog_price_applied": str(_get_mesh_catalog_price(company, mesh_type)) if _get_mesh_catalog_price(company, mesh_type) is not None else None,
         },
     }
 
